@@ -29,7 +29,7 @@ from base_ble.data_analyze import *
 
 
 def view_data(root):
-    from test_tkinter import remove_all_widgets, start_screen
+    from main_gui import remove_all_widgets, start_screen
     from tkinter import PhotoImage
 
     # button_user_menu_right.destroy()

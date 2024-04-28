@@ -1,7 +1,7 @@
 from tkinter import *
 from tkinter import ttk
-from gui_functions_filtered import *
-from get_recorded_data import *
+from collect_data import *
+from retrieve_data import *
 import multiprocessing as mp
 import sys
 import os
@@ -26,9 +26,9 @@ def remove_all_widgets(root):
 
 def start_screen(root):
 
-    from gui_functions_filtered import grab_raw_data, record_data
+    from collect_data import grab_raw_data, record_data
 
-    from get_recorded_data import view_data
+    from retrieve_data import view_data
 
     # root = Tk()
     root.title('SmartHub Data Visualization')
