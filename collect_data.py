@@ -18,9 +18,9 @@ from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 
 from bleak import BleakScanner, BleakClient
-from params import DATE_DIR, DATE_NOW
+from params import DATE_DIR, DATE_NOW, left_gain, left_offset, right_gain, right_offset
 
-from main_gui import remove_all_widgets, start_screen
+from test_tkinter import remove_all_widgets, start_screen
 
 # Import the calculation functions:
 from base_ble.calc import (
@@ -61,15 +61,36 @@ def grab_raw_data(q_send, q_recieve):
                 while start_message != 'run test':
                     start_message = q_send.get()
 
+                started = False
+
+                start_time = time.time()
+                last_time = 0
+
                 while True:
                     # asynchronously gets new data from ble
                     read_message1 = await client1.read_gatt_char(ch)
                     read_message2 = await client2.read_gatt_char(ch)
 
-                    q_recieve.put({'left': read_message1, 'right': read_message2})
+                    # get time values for data
+                    time_curr = time.time() - start_time
+                    time_vals = []
+                    for i in range(1, 5):
+                        time_vals.append(i * (time_curr - last_time) / 4 + last_time)
+                    last_time = time_curr
 
+                    if started:
+                        # send data to main process
+                        q_recieve.put({'left': read_message1, 
+                                    'right': read_message2, 
+                                    'time': time_vals})
+                    
+                    started = True
+                    
+                    ## figure out best way to exit this process    ##############################
                     if (q_send.empty() == False):
-                        exit()
+                        break
+        return
+        exit()          
 
     start_message = None
     while start_message != 'start':
@@ -201,7 +222,6 @@ def record_data(root, button_user_menu_right, button_user_menu_left, user_select
             # generate id based on current time
             test_datetime = datetime.now()
             datetime_str = f"{test_datetime.month}/{test_datetime.day}/{test_datetime.year}_{test_datetime.hour}:{test_datetime.minute}"
-            print(datetime_str)
 
             # new json for pushing to db
             post = {}
@@ -228,6 +248,7 @@ def record_data(root, button_user_menu_right, button_user_menu_left, user_select
             remove_all_widgets(root)
             start_screen(root)
 
+
         async def start_logging():
             start_time = time.time()
             last_time = 0
@@ -249,26 +270,47 @@ def record_data(root, button_user_menu_right, button_user_menu_left, user_select
                 # get all data in the queue, don't plot until the queue is empty
                 while not q_recieve.empty():
                     new_data = q_recieve.get()
-                    # parse down to lists
+                    time_vals = [i for i in new_data['time']]
+                    # print(time_vals)
                     data_right = [i for i in new_data['right']]
                     data_left = [i for i in new_data['left']]
-
                     # converts to real data, probably doesn't need to be await
                     accel_right_curr, gyro_right_curr = await convert_from_raw(data_right)
                     accel_left_curr, gyro_left_curr = await convert_from_raw(data_left)
+
+                    # add in gains and offsets to calibrate readings
+                    gyro_right_curr = [i*right_gain+right_offset for i in gyro_right_curr]
+                    gyro_left_curr = [i*left_gain+left_offset for i in gyro_left_curr]
+                    # Zero out small gyroscope readings from noise
+                    for i in range(4):
+                        if gyro_right_curr[i] < 0.02:
+                            gyro_right_curr[i] = 0
+                        if gyro_left_curr[i] < 0.02:
+                            gyro_left_curr[i] = 0
 
                     data['gyro_right'].extend(gyro_right_curr)
                     data['accel_right'].extend(accel_right_curr)
                     data['gyro_left'].extend(gyro_left_curr)
                     data['accel_left'].extend(accel_left_curr)
 
-                    time_curr = time.time() - start_time
-                    for i in range(1, 5):
-                        data['time_from_start'].append(i * (time_curr - last_time) / 4 + last_time)
-                    last_time = time_curr
+                    data['time_from_start'].extend(time_vals)
+
+                    # ### fix this ###########################################################################
+
+                    # time_curr = time.time() - start_time
+                    # for i in range(1, 5):
+                    #     data['time_from_start'].append(i * (time_curr - last_time) / 4 + last_time)
+                    # last_time = time_curr
+
+                    # ########################################################################################
+
+
 
                 if not data['time_from_start']:
                     continue
+
+                # print(data['time_from_start'][-1])
+
                 N_win = 15
                 # Padding the data
                 gyro_right_padded = np.pad(data['gyro_right'], (N_win//2, N_win-1-N_win//2), mode='edge')
@@ -312,7 +354,7 @@ def record_data(root, button_user_menu_right, button_user_menu_left, user_select
 
                 # Similarly, update the other subplots
                 if not axs[1].lines:
-                    axs[1].plot(data['time_from_start'], data['velocity'], label="Velocity")
+                    axs[1].plot(data['time_from_start'], data['heading_deg'], label="Heading")
                 else:
                     axs[1].lines[0].set_data(data['time_from_start'], data['velocity'])
 
