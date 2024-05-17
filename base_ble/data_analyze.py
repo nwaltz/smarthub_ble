@@ -103,18 +103,26 @@ def calculate_bout(time, distance, velocity):
     bout_starts = np.argwhere(moving_endpoints)[::2, 0]
     # Find when it crosses downward, or where bouts could end
     bout_ends = np.argwhere(moving_endpoints)[1::2, 0]
+    # If recording ends with a velocity above 0.12 m/s^2, add end point to the end of the bouts
+    if len(bout_starts) > len(bout_ends):
+        bout_ends = [len(velocity)-1]
     # Check if the potential bouts meet velocity requirement(need max velocity >0.12m/s) and time requirement(>5s)
-    for i in range(len(bout_starts)):
+    for i in range(bout_starts.size):
         # checks to see if the velocity over the "bout" is all less than required or if "bout" is less than 5 secs
-        if all(velocity[bout_starts[i]:bout_ends[i]] < 0.12) or time[bout_ends[i]]-time[bout_starts[i]]<5:
-            if i == len(bout_starts):
-                # Removes incomplete bout and combines with previous bout
-                del bout_starts[i]
-                del bout_ends[i-1]
+        # This loop should be improved using list comprehension
+        if all(velocity[bout_starts[i]:bout_ends[i]] < 0.12) or time[bout_ends[i]]-time[bout_starts[i]] < 5:
+            if i == len(bout_starts)-1:
+                # Removes incomplete bout
+                bout_starts[i] = -1
+                bout_ends[i] = -1
+                bout_starts = np.delete(bout_starts, i)
+                bout_ends = np.delete(bout_ends, i)
             else:
                 # Removes incomplete bout and combines with next bout
-                del bout_ends[i]
-                del bout_starts[i+1]
+                bout_ends[i] = -1
+                bout_starts[i+1] = -1
+    bout_starts = np.array([n for n in bout_starts if n != -1])
+    bout_ends = np.array([n for n in bout_ends if n != -1])
     # Find the differences in time and distance between possible bout endpoints
     bout = np.subtract(time[bout_ends], time[bout_starts])
     bout_dist = np.subtract(distance[bout_ends], distance[bout_starts])
@@ -124,7 +132,6 @@ def calculate_bout(time, distance, velocity):
     # plot the velocity curve with the bout endpoints marked
     # plt.plot(time,velocity,time[bout_indices],velocity[bout_indices],'r*')
     # plt.show()
-
     # create metrics object to store metrics
     metrics = Metrics()
     # Go through all the bouts and record stroke metrics for each
@@ -137,24 +144,28 @@ def calculate_bout(time, distance, velocity):
 
 
 def calculate_stroke_metrics(metrics: Metrics, velocity, time, distance):
+    # print(f"Bout duration: {time[-1]-time[0]}")
     # Find first and last points to determine start and end of run
     end_points = [0, len(velocity)-1]
-
     # Find index of all local minima
-    stroke_init, _ = find_peaks(-velocity, prominence=0.07)
+    stroke_init, _ = find_peaks(-velocity, prominence=0.07)  # originally both 0.07
     # Find index of all local maxima
     stroke_peaks, _ = find_peaks(velocity, prominence=0.07)
 
     # Find beginning of each stroke
     stroke_init = np.insert(stroke_init, 0, end_points[0])
     stroke_init = np.append(stroke_init, end_points[len(end_points)-1])
-
+    if stroke_init.size == 0:
+        raise ValueError("No strokes detected in data")
     # Find time and distances when strokes start and end
     stroke_init_time = time[stroke_init]
     stroke_init_dist = distance[stroke_init]
     # Find time and distances at peak of strokes
     stroke_peak_time = time[stroke_peaks]
     stroke_peak_dist = distance[stroke_peaks]
+    # Plot that shows the points of interest in the strokes
+    # plt.plot(time, velocity, time[stroke_init], velocity[stroke_init], 'bs', time[stroke_peaks], velocity[stroke_peaks], 'r*')
+    # plt.show()
 
     # Calculate the number of strokes and appends the value to the list of numbers of strokes for each bout
     stroke_num = len(stroke_init_time)-1
@@ -176,8 +187,10 @@ def calculate_stroke_metrics(metrics: Metrics, velocity, time, distance):
     rate_rise = np.zeros(len(stroke_peaks))
     roll_resist = np.zeros(len(stroke_peaks))
     for i in range(len(stroke_peaks)):
-        # Calculate the rate of rise for each stroke
-        rate_rise[i] = np.mean(acc_grad[stroke_init[i]:stroke_peaks[i]])
+        # Determine peak acceleration for each contact phase:
+        acc_peak_time = np.argmax(acc_grad[stroke_init[i]:stroke_peaks[i]])
+        # Calculate the rate of rise for each contact phase up to maximum acceleration
+        rate_rise[i] = np.mean(acc_grad[stroke_init[i]:stroke_init[i]+acc_peak_time])
         # Calculate the rolling resistance for each stroke
         roll_resist[i] = np.mean(acc_grad[stroke_peaks[i]:stroke_init[i+1]])
     # Calculate the overall average rolling resistance for the bout
@@ -221,12 +234,7 @@ def calculate_stroke_metrics(metrics: Metrics, velocity, time, distance):
                           rate_rise_ss,
                           st_freq_su,
                           st_freq_ss)
-    # Plot that shows the points of interest in the strokes
-    # plt.plot(time,velocity,time[stroke_init],velocity[stroke_init],'bs',time[stroke_peaks],velocity[stroke_peaks],'r*')
-    # plt.show()
 
-    # Need method to find Tangential Force
-    # Then also need to calculate Variability, Effort
     # return the metrics
     return metrics
 
