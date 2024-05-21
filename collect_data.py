@@ -20,7 +20,7 @@ from pymongo.server_api import ServerApi
 from bleak import BleakScanner, BleakClient
 from params import DATE_DIR, DATE_NOW, left_gain, left_offset, right_gain, right_offset
 
-from test_tkinter import remove_all_widgets, start_screen
+from main_gui import remove_all_widgets, start_screen
 
 # Import the calculation functions:
 from base_ble.calc import (
