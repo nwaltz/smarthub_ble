@@ -1,18 +1,39 @@
-# from tkinter import *
 import tkinter as tk
-from tkinter import font
-from tkinter import ttk
-from retrieve_data import *
-import multiprocessing as mp
+from tkinter import font, ttk, Label
+import cred
 import sys
 import time
 import os
+import json
+import bisect
+import math
+from tk_slider_widget import Slider
+
+import multiprocessing as mp
+
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+from matplotlib.ticker import MultipleLocator
+
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
+
+from base_ble.calc import (
+    get_displacement_m,
+    get_distance_m,
+    get_velocity_m_s,
+    get_heading_deg,
+    get_top_traj
+)
 
 def draw_grid_lines(tab):
     rows, cols = tab.grid_size()
-    for i in range(rows):
-        ttk.Separator(tab, orient='horizontal').grid(row=i, column=0, columnspan=cols, sticky='sew')
-    for i in range(cols):
+    # for i in range(rows):
+    #     ttk.Separator(tab, orient='horizontal').grid(row=i, column=0, columnspan=cols, sticky='sew')
+    
+    # for i in range(rows):
+    #     ttk.Separator(tab, orient='horizontal').grid(row=i, column=0, columnspan=cols, sticky='sew')
+    for i in range(10):
         ttk.Separator(tab, orient='vertical').grid(row=0, column=i, rowspan=rows, sticky='nse')
 
 class ViewData:
@@ -20,9 +41,40 @@ class ViewData:
     def __init__(self, tab):
         self.tab = tab
 
-        self.initialize_tab()
+        self.last_scale_update = time.time()
+        self.overlay = tk.BooleanVar(value=False)
 
-    def find_test_runs(self, user_id):
+        self.prev_data = []
+
+        # self.initialize_tab(auto=True)
+        self.initialize_tab(auto=False)
+        
+        if not os.path.exists('config.json'):
+            self.config = {}
+        else:
+            with open('config.json', 'r') as config_file:
+                self.config = json.load(config_file)
+
+
+    def update_config(self, key, value=None):
+        # most recent config info is retrieved from file and stored in self.config. no need to manually set self.config
+        # if value is none, key is removed from config
+        with open('config.json', 'r') as config_file:
+            self.config = json.load(config_file)
+            if value == None:
+                self.config.pop(key)
+            else:
+                self.config[key] = value
+
+        with open('config.json', 'w') as config_file:
+            json.dump(self.config, config_file)
+
+    def on_exit(self):
+        self.update_config('gridlines', self.trajectory_gridlines_check.get())
+        sys.exit()
+
+
+    def find_test_runs(self, user_id, auto=False):
 
         username = cred.username
         password = cred.password
@@ -44,8 +96,6 @@ class ViewData:
                 self.new_valid_ids.append(id_val)
             self.valid_ids.append(id_val)
 
-        print(self.valid_ids)
-
         default_font = font.nametofont("TkDefaultFont")
         default_font.configure(size=20)
 
@@ -53,6 +103,13 @@ class ViewData:
         self.select_test_run.grid(row=2, column=0, pady=10, columnspan=2, sticky='nsew')
         # self.select_test_run.set(self.new_valid_ids[0])
         self.select_test_run.bind("<<ComboboxSelected>>", self.show_data)
+
+        self.overlay_check = tk.Checkbutton(self.tab, text='Overlay', variable=self.overlay, selectcolor='black')
+        self.overlay_check.grid(row=2, column=2, pady=10, columnspan=2, sticky='nsew')
+
+        if auto:
+            self.select_test_run.set(self.new_valid_ids[-1])
+            self.show_data(auto)
 
     def zoom(self, direction):
         if direction == '+':
@@ -64,51 +121,152 @@ class ViewData:
                 self.dpi -= 10
                 self.show_data(None, dpi=self.dpi)
 
+    def set_subplot_labels(self):
+        self.axs[0].set_xlabel('Time (sec)').set_color('white')
+        self.axs[0].set_ylabel('Displacement (m)').set_color('white')
+        self.axs[0].set_title('Displacement vs Time').set_color('white')
+
+        self.axs[1].set_xlabel('X Trajectory (m)').set_color('white')
+        self.axs[1].set_ylabel('Y Trajectory (m)').set_color('white')
+        self.axs[1].set_title('Trajectory').set_color('white')
+        self.axs[1].set_aspect('equal', adjustable='datalim')
+
+        self.axs[2].set_xlabel('Time (sec)').set_color('white')
+        self.axs[2].set_ylabel('Heading (deg)').set_color('white')
+        self.axs[2].set_title('Heading vs Time').set_color('white')
+
+        self.axs[3].set_xlabel('Time (sec)').set_color('white')
+        self.axs[3].set_ylabel('Velocity (m/s)').set_color('white')
+        self.axs[3].set_title('Velocity vs Time').set_color('white')
+
+    def populate_metadata(self, data):
+
+        def on_entry_change(var, key):
+            # self.data[key] = var.get()
+            # print(f"{key} changed to {var.get()}")  # Replace with desired action
+            save_metadata_button.config(text='Save Metadata', state='enabled')
+            # pass
+
+        ttk.Separator(self.tab, orient='horizontal').grid(row=10, column=0, columnspan=3, sticky='new')
+
+        test_name_var = tk.StringVar()
+        Label(self.tab, text=f'Test Name: ', font=font.Font(size=14)).grid(row=14, column=0, sticky='nsw')
+        test_name_entry = ttk.Entry(self.tab, textvariable=test_name_var, width=15, font=font.Font(size=12))
+        if 'test_name' not in data:
+            test_name_var.set(data['_id'])
+            # test_name_entry.insert(0, data['_id'])
+        else:
+            test_name_var.set(data['test_name'])
+            # test_name_entry.insert(0, data['test_name'])
+        test_name_entry.grid(row=14, column=1, columnspan=2, sticky='nsew')
+        test_name_var.trace_add('write', lambda name, index, mode, var=test_name_var: on_entry_change(var, 'test_name'))
+
+        clinician_id_var = tk.StringVar()
+        Label(self.tab, text=f'Clinician ID: ', font=font.Font(size=14)).grid(row=18, column=0, sticky='nsw')
+        clinician_id_entry = ttk.Entry(self.tab, textvariable=clinician_id_var, width=15, font=font.Font(size=12))
+        if 'clinician_id' in data:
+            # clinician_id_entry.insert(0, data['clinician_id'])
+            clinician_id_var.set(data['clinician_id'])
+        clinician_id_entry.grid(row=18, column=1, columnspan=2, sticky='nsew')
+        clinician_id_var.trace_add('write', lambda name, index, mode, var=clinician_id_var: on_entry_change(var, 'clinician_id'))
+
+        location_id_var = tk.StringVar()
+        Label(self.tab, text=f'Location ID: ', font=font.Font(size=14)).grid(row=22, column=0, sticky='nsw')
+        location_id_entry = ttk.Entry(self.tab, textvariable=location_id_var, width=15, font=font.Font(size=12))
+        if 'location_id' in data:
+            location_id_var.set(data['location_id'])
+            # location_id_entry.insert(0, data['location_id'])
+        location_id_entry.grid(row=22, column=1, columnspan=2, sticky='nsew')
+        location_id_var.trace_add('write', lambda name, index, mode, var=location_id_var: on_entry_change(var, 'location_id'))
+
+        ttk.Separator(self.tab, orient='horizontal').grid(row=26, column=0, columnspan=3, sticky='new')
+
+        Label(self.tab, text=f'Additional Information: ', font=font.Font(size=14)).grid(row=30, column=0, columnspan=3, sticky='nsew')
+        additional_notes_entry = tk.Text(self.tab, width=30, height=18, font=font.Font(size=12), bg='whitesmoke', fg='black', insertbackground='black')
+        if 'additional_notes' in data:
+            additional_notes_entry.insert(1.0, data['additional_notes'])
+        additional_notes_entry.grid(row=34, column=0, columnspan=3, rowspan=50, sticky='nsew')
+        additional_notes_entry.bind('<KeyRelease>', lambda event: on_entry_change(additional_notes_entry, 'additional_notes'))
+
+
+        ttk.Separator(self.tab, orient='horizontal').grid(row=88, column=0, columnspan=3, sticky='new')
+
+        def save_metadata():
+            data['test_name'] = test_name_entry.get()
+            data['clinician_id'] = clinician_id_entry.get()
+            data['location_id'] = location_id_entry.get()
+            data['additional_notes'] = additional_notes_entry.get(1.0, 'end')
+
+            self.test_collection.update_one({'_id': data['_id']}, {'$set': data})
+
+            save_metadata_button.config(text='Saved Metadata', state='disabled')
+
+        style = ttk.Style()
+        style.configure('TButton', foreground='whitesmoke')
+        style.map('TButton', foreground=[('disabled', 'whitesmoke')])
+
+        save_metadata_button = ttk.Button(self.tab, text='Save Metadata', command=save_metadata)
+        save_metadata_button.grid(row=92, column=0, columnspan=3, sticky='nsew')
+
+        test_name_entry.bind('<Return>', lambda event: save_metadata())
+        clinician_id_entry.bind('<Return>', lambda event: save_metadata())
+        location_id_entry.bind('<Return>', lambda event: save_metadata())
+        additional_notes_entry.bind('<Return>', lambda event: save_metadata())
+
+        # draw_grid_lines(self.tab)
+
 
         
     
-    def show_data(self, event, dpi=100):
+    def show_data(self, event, dpi=100, gridlines=False):
+        # if hasattr(self, 'canvas_widgets'):
+        #     for i, widget in enumerate(self.canvas_widgets):
+        #         print(widget)
+        #         widget.grid_forget()
+        #         widget.destroy()
+        #         self.canvas_widgets.pop(i)
+        # time.sleep(0.5)
         self.dpi = dpi
         test_name = self.valid_ids[self.new_valid_ids.index(self.select_test_run.get())]
 
         data = self.test_collection.find({'_id': test_name})[0]
 
-        screen_width = self.tab.winfo_screenwidth()
-        screen_height = self.tab.winfo_screenheight()
+        if not hasattr(self, 'fig'):
+            screen_width = self.tab.winfo_screenwidth()
+            screen_height = self.tab.winfo_screenheight()
 
-        fig = Figure(figsize=((screen_width-400)/dpi, (screen_height-200)/dpi), dpi=dpi)
-        fig.set_facecolor(str(ttk.Style().lookup('TFrame', 'background')))
-        axs=[]
-        axs.append(fig.add_subplot(221))
-        axs.append(fig.add_subplot(222))
-        axs.append(fig.add_subplot(223))
-        axs.append(fig.add_subplot(224))
-        for ax in axs:
-            ax.tick_params(colors='white')
-            # ax.set_facecolor(str(ttk.Style().lookup('TFrame', 'foreground')))
-            ax.set_facecolor('lightgray')
-            
+            self.fig = Figure(figsize=((screen_width-400)/dpi, (screen_height-200)/dpi), dpi=dpi)
+            self.fig.set_facecolor(str(ttk.Style().lookup('TFrame', 'background')))
+            self.axs=[]
+            self.axs.append(self.fig.add_subplot(221))
+            self.axs.append(self.fig.add_subplot(222))
+            self.axs.append(self.fig.add_subplot(223))
+            self.axs.append(self.fig.add_subplot(224))
+            for ax in self.axs:
+                ax.tick_params(colors='white')
+                # ax.set_facecolor(str(ttk.Style().lookup('TFrame', 'foreground')))
+                ax.set_facecolor('whitesmoke')
 
-        # fig.subplots_adjust(left=, right=0.6, bottom=0.4, top=0.6, wspace=0.2, hspace=0.2)
+            self.canvas = FigureCanvasTkAgg(self.fig, master=self.tab)
+
         border = dpi/400
-        print(border)
-        # fig.subplots_adjust(left=0.05, right=1-border, bottom=0.05, top=1-border)
-
-        fig.subplots_adjust(left=0.05, right=0.95, bottom=0.075, top=0.95, wspace=border, hspace=border)
-
-        canvas = FigureCanvasTkAgg(fig, master=self.tab)
-
-        # fig.tight_layout()
+        self.fig.subplots_adjust(left=0.05, right=0.95, bottom=0.075, top=0.95, wspace=border, hspace=border)
+        
+        self.canvas_widgets = []
 
         self.tab.columnconfigure(2, minsize=150)
         # draw_grid_lines(self.tab)
 
-        canvas.get_tk_widget().grid(row=1, column=3, columnspan=100, rowspan=100, padx=0, pady=0, sticky='nsew')
-
         operator_id_label = Label(self.tab, text=f'Operator ID: {data["user_id"]}', font=font.Font(size=18))
         operator_id_label.grid(row=0, column=3, columnspan=100, sticky='sew')
+        self.canvas_widgets.append(operator_id_label)
 
-        if event:
+        if type(event) != type(True):
+            self.zoom_in_button = ttk.Button(self.tab, text='+', command=lambda: self.zoom('+'))
+            self.zoom_in_button.grid(row=0, column=95, pady=10, columnspan=3, sticky='nsew')
+            self.zoom_out_button = ttk.Button(self.tab, text='-', command=lambda: self.zoom('-'))
+            self.zoom_out_button.grid(row=0, column=92, pady=10, columnspan=3, sticky='nsew')
+        elif type(event) == type(True) and event == True:
             self.zoom_in_button = ttk.Button(self.tab, text='+', command=lambda: self.zoom('+'))
             self.zoom_in_button.grid(row=0, column=95, pady=10, columnspan=3, sticky='nsew')
             self.zoom_out_button = ttk.Button(self.tab, text='-', command=lambda: self.zoom('-'))
@@ -117,39 +275,111 @@ class ViewData:
             self.zoom_in_button.lift()
             self.zoom_out_button.lift()
 
-        # draw_grid_lines(self.tab)
+        self.canvas_widgets.append(self.zoom_in_button)
+        self.canvas_widgets.append(self.zoom_out_button)
 
-
-        # Set overall title of figure:
-        # fig.suptitle(f'Operator ID: {data["user_id"]}', fontsize=20)
+        self.trajectory_gridlines_check = tk.BooleanVar(self.tab, value=gridlines)
+        show_trajectory_gridlines = tk.Checkbutton(self.tab, text='Show Gridlines', selectcolor='black',variable=self.trajectory_gridlines_check, font=font.Font(size=12), command=lambda: self.show_data(None, dpi=dpi, gridlines=self.trajectory_gridlines_check.get()))
+        show_trajectory_gridlines.grid(row=1, column=89, columnspan=10)
+        self.canvas_widgets.append(show_trajectory_gridlines)
 
         data['heading_deg'] = get_heading_deg(data['elapsed_time_s'], data['gyro_left'], data['gyro_right'])
         data['velocity'] = get_velocity_m_s(data['elapsed_time_s'], data['gyro_left'], data['gyro_right'])
 
-        axs[0].set_xlabel('Time (sec)').set_color('white')
-        axs[0].set_ylabel('Displacement (m)').set_color('white')
-        axs[0].set_title('Displacement vs Time').set_color('white')
-        axs[0].plot(data['elapsed_time_s'], data['distance_m'])
+        overlay = self.overlay.get()
+        if not overlay:
+            for ax in self.axs:
+                ax.clear()
+            self.prev_data = []
+        self.prev_data.append(data)
 
-        axs[1].set_xlabel('X Trajectory (m)').set_color('white')
-        axs[1].set_ylabel('Y Trajectory (m)').set_color('white')
-        axs[1].set_title('Trajectory').set_color('white')
-        axs[1].plot(data['traj_x'], data['traj_y'])
+        self.axs[0].plot(data['elapsed_time_s'], data['distance_m'])
+        self.axs[1].plot(data['traj_x'], data['traj_y'])
+        self.axs[1].set_aspect('equal', adjustable='datalim')
 
-        axs[2].set_xlabel('Time (sec)').set_color('white')
-        axs[2].set_ylabel('Heading (deg)').set_color('white')
-        axs[2].set_title('Heading vs Time').set_color('white')
-        axs[2].plot(data['elapsed_time_s'], data['heading_deg'])
+        if gridlines:
+            self.axs[1].grid(True)
+            if max(data['traj_x']) - min(data['traj_x']) > 8:
+                tick_spacing = math.ceil((max(data['traj_x']) - min(data['traj_x']))/8)
+            else:
+                tick_spacing = math.ceil(max(data['traj_x']) - min(data['traj_x']))/8
+            self.axs[1].xaxis.set_major_locator(MultipleLocator(tick_spacing))  # Set x-axis major tick spacing to 2 for the second subplot
+            self.axs[1].yaxis.set_major_locator(MultipleLocator(tick_spacing))  # Set y-axis major tick spacing to 2 for the second subplot
 
-        axs[3].set_xlabel('Time (sec)').set_color('white')
-        axs[3].set_ylabel('Velocity (m/s)').set_color('white')
-        axs[3].set_title('Velocity vs Time').set_color('white')
-        axs[3].plot(data['elapsed_time_s'], data['velocity'])
+        self.axs[2].plot(data['elapsed_time_s'], data['heading_deg'])
+        self.axs[3].plot(data['elapsed_time_s'], data['velocity'])
+
+        self.set_subplot_labels()
+
+        self.canvas.draw()
+        self.canvas.flush_events()  
+        # self.axs[1].set_aspect('equal')
+
+        self.canvas.get_tk_widget().grid(row=1, column=3, columnspan=100, rowspan=100, padx=0, pady=0, sticky='nsew')
+
+        self.populate_metadata(data)
+
+        def scale(vals):
+            self.last_scale_update = time.time()
+            overlay = self.overlay.get()
+            # if not overlay:
+            for ax in self.axs:
+                ax.clear()
+
+            for data_list in self.prev_data:
+                left_elem = bisect.bisect_left(data['elapsed_time_s'], vals[0])
+                right_elem = bisect.bisect_right(data['elapsed_time_s'], vals[1])
+
+                self.axs[0].plot(data_list['elapsed_time_s'][left_elem:right_elem], data_list['distance_m'][left_elem:right_elem])
+                self.axs[1].plot(data_list['traj_x'][left_elem:right_elem], data_list['traj_y'][left_elem:right_elem])
+                self.axs[2].plot(data_list['elapsed_time_s'][left_elem:right_elem], data_list['heading_deg'][left_elem:right_elem])
+                self.axs[3].plot(data_list['elapsed_time_s'][left_elem:right_elem], data_list['velocity'][left_elem:right_elem])
+
+                if self.trajectory_gridlines_check.get():
+                    self.axs[1].grid(True)
+                    if max(data_list['traj_x']) - min(data_list['traj_x']) > 8:
+                        tick_spacing = math.ceil((max(data_list['traj_x']) - min(data_list['traj_x']))/8)
+                    else:
+                        tick_spacing = math.ceil(max(data_list['traj_x']) - min(data_list['traj_x']))/8
+                    self.axs[1].xaxis.set_major_locator(MultipleLocator(tick_spacing))
+                    self.axs[1].yaxis.set_major_locator(MultipleLocator(tick_spacing))
+
+            self.set_subplot_labels()
+
+            for ax in self.axs:
+                ax.relim()
+                ax.autoscale()
+            self.canvas.draw()
+            self.canvas.flush_events()    
+
+        max_time = 0
+        min_time = 1000000
+        for data_list in self.prev_data:
+            if data['elapsed_time_s'][-1] > max_time:
+                max_time = data['elapsed_time_s'][-1]
+            if data['elapsed_time_s'][0] < min_time:
+                min_time = data['elapsed_time_s'][0]
+
+        slider = Slider(
+            self.tab,
+            width=1400,
+            height=40,
+            min_val=min_time,
+            max_val= max_time,
+            init_lis=[min_time, max_time],
+            show_value=True,
+            removable=False,
+            addable=False,
+        )
+        slider.setValueChangeCallback(scale)
+        slider.grid(row=102, rowspan=3, column=3, columnspan=100, sticky='nsew')
+        Label(self.tab, text='Time Range (sec)', font=font.Font(size=14)).grid(row=101, column=3, columnspan=100, sticky='nsew')
+        self.canvas_widgets.append(slider)
 
         # draw_grid_lines(self.tab)
 
 
-    def initialize_tab(self):
+    def initialize_tab(self, auto=False):
 
         ttk.Label(self.tab, text="Select User ID: ", justify='center', font=font.Font(size=14))\
             .grid(row=0, column=0, pady=10, columnspan=2)
@@ -160,4 +390,7 @@ class ViewData:
         ttk.Button(self.tab, text='Enter', command=lambda: self.find_test_runs(select_user_id.get())).grid(row=1, column=1, pady=10, sticky='nsew')
 
         select_user_id.bind('<Return>', lambda event: self.find_test_runs(select_user_id.get()))
+
+        if auto:
+            self.find_test_runs('654321', auto=True)
                             
