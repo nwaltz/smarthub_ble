@@ -4,8 +4,10 @@ import cred
 import sys
 import time
 import os
+import csv
 import json
 import bisect
+import pandas as pd
 import math
 from tk_slider_widget import Slider
 
@@ -25,6 +27,7 @@ from base_ble.calc import (
     get_heading_deg,
     get_top_traj
 )
+from base_ble.data_analyze import export_metrics, calculate_bout, Metrics
 
 def draw_grid_lines(tab):
     rows, cols = tab.grid_size()
@@ -71,18 +74,20 @@ class ViewData:
 
     def on_exit(self):
         self.update_config('gridlines', self.trajectory_gridlines_check.get())
+        self.client.close()
         sys.exit()
 
 
     def find_test_runs(self, user_id, auto=False):
 
-        username = cred.username
-        password = cred.password
 
-        uri = f"mongodb+srv://{username}:{password}@smarthub.gbdlpxs.mongodb.net/?retryWrites=true&w=majority"
-        client = MongoClient(uri, server_api=ServerApi('1'))
-        smarthub_db = client.Smarthub
-        self.test_collection = smarthub_db.test_collection
+        # username = cred.username
+        # password = cred.password
+
+        # uri = f"mongodb+srv://{username}:{password}@smarthub.gbdlpxs.mongodb.net/?retryWrites=true&w=majority"
+        # client = MongoClient(uri, server_api=ServerApi('1'))
+        # smarthub_db = client.Smarthub
+        # self.test_collection = smarthub_db.test_collection
 
         self.all_ids = self.test_collection.find({'user_id': user_id}, {'_id': 1, 'test_name': 1})
         self.valid_ids = []
@@ -104,6 +109,8 @@ class ViewData:
         # self.select_test_run.set(self.new_valid_ids[0])
         self.select_test_run.bind("<<ComboboxSelected>>", self.show_data)
 
+        self.tab.columnconfigure(2, minsize=150)
+
         self.overlay_check = tk.Checkbutton(self.tab, text='Overlay', variable=self.overlay, selectcolor='black')
         self.overlay_check.grid(row=2, column=2, pady=10, columnspan=2, sticky='nsew')
 
@@ -120,6 +127,62 @@ class ViewData:
             if self.dpi > 50:
                 self.dpi -= 10
                 self.show_data(None, dpi=self.dpi)
+
+    def download_metrics(self, data):
+        metrics = calculate_bout(time=data['elapsed_time_s'],
+                                distance=data['distance_m'],
+                                velocity=data['velocity'])
+        
+        output_data = export_metrics(time_from_start=data['elapsed_time_s'],
+                                    distance=data['distance_m'],
+                                    velocity=data['velocity'],
+                                    heading=data['heading_deg'],
+                                    trajectory_x=data['traj_x'],
+                                    trajectory_y=data['traj_y'],
+                                    metrics=metrics)
+
+        filename = tk.filedialog.asksaveasfilename(title='Save Metrics', filetypes=[('CSV files', '*.csv')])
+        if filename == '':
+            return
+        
+        if '.csv' not in filename:
+            filename += '.csv'
+
+        output_data.to_csv(filename, index=False)
+
+    def download_raw_data(self, data):
+        filename = tk.filedialog.asksaveasfilename(title='Save Metrics', filetypes=[('CSV files', '*.csv')])
+        if filename == '':
+            return
+        
+        if '.csv' not in filename:
+            filename += '.csv'
+
+        # data['heading_deg'] = get_heading_deg(data['elapsed_time_s'], data['gyro_left'], data['gyro_right'])
+        # data['velocity'] = get_velocity_m_s(data['elapsed_time_s'], data['gyro_left'], data['gyro_right'])
+
+        # data['distance_m'] = get_distance_m(data['elapsed_time_s'], data['gyro_left'], data['gyro_right'])
+
+        # data['traj_x'], data['traj_y'] = get_top_traj(data['distance_m'], data['velocity'], data['heading_deg'], data['elapsed_time_s'])
+
+        max_length = len(data['elapsed_time_s'])
+
+        # Pad shorter lists with None
+        listed_data = {key: [value] if type(value) != list else value for key, value in data.items()}
+        output_data = {key: (value + [None] * (max_length - len(value))) for key, value in listed_data.items()}
+
+        with open(filename, 'w', newline='') as csvfile:
+            fieldnames = output_data.keys()
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+            writer.writeheader()
+            for i in range(max_length):
+                row = {key: output_data[key][i] for key in fieldnames}
+                writer.writerow(row)
+
+        # df = pd.DataFrame(output_data)
+        # print(filename)
+        # df.to_csv(filename, index=False)
 
     def set_subplot_labels(self):
         self.axs[0].set_xlabel('Time (sec)').set_color('white')
@@ -152,12 +215,15 @@ class ViewData:
         test_name_var = tk.StringVar()
         Label(self.tab, text=f'Test Name: ', font=font.Font(size=14)).grid(row=14, column=0, sticky='nsw')
         test_name_entry = ttk.Entry(self.tab, textvariable=test_name_var, width=15, font=font.Font(size=12))
-        if 'test_name' not in data:
+        if 'test_name' in data:
+            test_name_var.set(data['test_name'])
             test_name_var.set(data['_id'])
             # test_name_entry.insert(0, data['_id'])
-        else:
-            test_name_var.set(data['test_name'])
+        elif '_id' in data:
+            test_name_var.set(data['_id'])
             # test_name_entry.insert(0, data['test_name'])
+        else:
+            test_name_var.set('')
         test_name_entry.grid(row=14, column=1, columnspan=2, sticky='nsew')
         test_name_var.trace_add('write', lambda name, index, mode, var=test_name_var: on_entry_change(var, 'test_name'))
 
@@ -182,14 +248,14 @@ class ViewData:
         ttk.Separator(self.tab, orient='horizontal').grid(row=26, column=0, columnspan=3, sticky='new')
 
         Label(self.tab, text=f'Additional Information: ', font=font.Font(size=14)).grid(row=30, column=0, columnspan=3, sticky='nsew')
-        additional_notes_entry = tk.Text(self.tab, width=30, height=18, font=font.Font(size=12), bg='whitesmoke', fg='black', insertbackground='black')
+        additional_notes_entry = tk.Text(self.tab, width=30, height=10, font=font.Font(size=12), bg='whitesmoke', fg='black', insertbackground='black')
         if 'additional_notes' in data:
             additional_notes_entry.insert(1.0, data['additional_notes'])
-        additional_notes_entry.grid(row=34, column=0, columnspan=3, rowspan=50, sticky='nsew')
+        additional_notes_entry.grid(row=34, column=0, columnspan=3, rowspan=30, sticky='nsew')
         additional_notes_entry.bind('<KeyRelease>', lambda event: on_entry_change(additional_notes_entry, 'additional_notes'))
 
 
-        ttk.Separator(self.tab, orient='horizontal').grid(row=88, column=0, columnspan=3, sticky='new')
+        ttk.Separator(self.tab, orient='horizontal').grid(row=68, column=0, columnspan=3, sticky='new')
 
         def save_metadata():
             data['test_name'] = test_name_entry.get()
@@ -206,7 +272,7 @@ class ViewData:
         style.map('TButton', foreground=[('disabled', 'whitesmoke')])
 
         save_metadata_button = ttk.Button(self.tab, text='Save Metadata', command=save_metadata)
-        save_metadata_button.grid(row=92, column=0, columnspan=3, sticky='nsew')
+        save_metadata_button.grid(row=72, column=0, columnspan=3, sticky='nsew')
 
         test_name_entry.bind('<Return>', lambda event: save_metadata())
         clinician_id_entry.bind('<Return>', lambda event: save_metadata())
@@ -215,10 +281,17 @@ class ViewData:
 
         # draw_grid_lines(self.tab)
 
+        download_metrics_button = ttk.Button(self.tab, text='Download Metrics', command=lambda: self.download_metrics(data))
+        download_metrics_button.grid(row=76, column=0, columnspan=3, sticky='nsew')
+
+        download_raw_data_button = ttk.Button(self.tab, text='Download Raw Data', command=lambda: self.download_raw_data(data))
+        download_raw_data_button.grid(row=80, column=0, columnspan=3, sticky='nsew')
+
+
 
         
     
-    def show_data(self, event, dpi=100, gridlines=False):
+    def show_data(self, event, dpi=100, gridlines=False, data=None):
         # if hasattr(self, 'canvas_widgets'):
         #     for i, widget in enumerate(self.canvas_widgets):
         #         print(widget)
@@ -227,9 +300,10 @@ class ViewData:
         #         self.canvas_widgets.pop(i)
         # time.sleep(0.5)
         self.dpi = dpi
-        test_name = self.valid_ids[self.new_valid_ids.index(self.select_test_run.get())]
 
-        data = self.test_collection.find({'_id': test_name})[0]
+        if data is None:
+            test_name = self.valid_ids[self.new_valid_ids.index(self.select_test_run.get())]
+            data = self.test_collection.find({'_id': test_name})[0]
 
         if not hasattr(self, 'fig'):
             screen_width = self.tab.winfo_screenwidth()
@@ -283,8 +357,10 @@ class ViewData:
         show_trajectory_gridlines.grid(row=1, column=89, columnspan=10)
         self.canvas_widgets.append(show_trajectory_gridlines)
 
-        data['heading_deg'] = get_heading_deg(data['elapsed_time_s'], data['gyro_left'], data['gyro_right'])
-        data['velocity'] = get_velocity_m_s(data['elapsed_time_s'], data['gyro_left'], data['gyro_right'])
+        if 'heading_deg' not in data:
+            data['heading_deg'] = get_heading_deg(data['elapsed_time_s'], data['gyro_left'], data['gyro_right'])
+        if 'velocity' not in data:
+            data['velocity'] = get_velocity_m_s(data['elapsed_time_s'], data['gyro_left'], data['gyro_right'])
 
         overlay = self.overlay.get()
         if not overlay:
@@ -378,6 +454,48 @@ class ViewData:
 
         # draw_grid_lines(self.tab)
 
+    def load_csv(self):
+
+        filename = tk.filedialog.askopenfilename(title='Select a CSV file', filetypes=[('CSV files', '*.csv')])
+        if filename == '':
+            return
+
+        # data = pd.read_csv(filename)
+        # data['heading_deg'] = get_heading_deg(data['elapsed_time_s'], data['gyro_left'], data['gyro_right'])
+        # data['velocity'] = get_velocity_m_s(data['elapsed_time_s'], data['gyro_left'], data['gyro_right'])
+
+        # data['elapsed_time_s'] = data['elapsed_time_s']
+        # data['distance_m'] = get_displacement_m(data['gyro_left'], data['gyro_right'], data['elapsed_time_s'])
+        # (data['traj_x'], data['traj_y']) = get_top_traj(data['distance_m'], data['velocity'], data['heading_deg'], data['elapsed_time_s'])
+        def convert_value(value):
+            try:
+                if '.' in value:
+                    return float(value)
+                else:
+                    return int(value)
+            except ValueError:
+                return value
+        
+        data = {}
+        with open(filename, 'r') as csvfile:
+            reader = csv.reader(csvfile)
+            headers = next(reader)
+            for header in headers:
+                data[header] = []
+
+            for row in reader:
+                for header, value in zip(headers, row):
+                    data[header].append(convert_value(value))
+
+        for key, value in data.items():
+            if value[1] == '':
+                data[key] = value[0]
+       
+
+        # self.prev_data.append(data)
+
+        self.show_data(True, data=data)     
+
 
     def initialize_tab(self, auto=False):
 
@@ -390,6 +508,16 @@ class ViewData:
         ttk.Button(self.tab, text='Enter', command=lambda: self.find_test_runs(select_user_id.get())).grid(row=1, column=1, pady=10, sticky='nsew')
 
         select_user_id.bind('<Return>', lambda event: self.find_test_runs(select_user_id.get()))
+
+        ttk.Button(self.tab, text='Load CSV', command=lambda: self.load_csv()).grid(row=1, column=2, pady=10, padx=10, sticky='nse')
+
+        username = cred.username
+        password = cred.password
+
+        uri = f"mongodb+srv://{username}:{password}@smarthub.gbdlpxs.mongodb.net/?retryWrites=true&w=majority"
+        self.client = MongoClient(uri, server_api=ServerApi('1'))
+        smarthub_db = self.client.Smarthub
+        self.test_collection = smarthub_db.test_collection
 
         if auto:
             self.find_test_runs('654321', auto=True)

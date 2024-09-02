@@ -16,9 +16,18 @@ else:
     base_path = os.path.dirname(os.path.abspath(__file__))
     theme_file_path = os.path.join(base_path, 'forest-dark.tcl')
 
+def end_fullscreen(root=None):
+        root.attributes("-fullscreen", False)
+
 def initalize_gui():
     root = Tk()
     style = ttk.Style(root)
+
+    root.attributes("-fullscreen", True)
+
+    root.bind("<Escape>", lambda event: end_fullscreen(root))
+    root.bind("<Control-Key-q>", lambda event: root.destroy())
+
     root.tk.call('source', theme_file_path)
     style.theme_use('forest-dark')
     root.title('SmartHub Data Visualization')
