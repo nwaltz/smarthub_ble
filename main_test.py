@@ -4,8 +4,10 @@ from retrieve_data import *
 import multiprocessing as mp
 import sys
 import os
+import asyncio
 
 from view_data_tab import ViewData
+from record_data_tab import RecordData
 
 if getattr(sys, 'frozen', False):
     # Running in a bundle
@@ -56,9 +58,11 @@ def initalize_gui():
     notebook.add(calibrate_tab, text="Calibrate")
 
     ViewData(view_data_tab)
-
+    RecordData(record_data_tab)
 
     root.mainloop()
 
 if __name__ == '__main__':
+
     initalize_gui()
+
