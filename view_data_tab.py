@@ -184,23 +184,26 @@ class ViewData:
         # print(filename)
         # df.to_csv(filename, index=False)
 
-    def set_subplot_labels(self):
-        self.axs[0].set_xlabel('Time (sec)').set_color('white')
-        self.axs[0].set_ylabel('Displacement (m)').set_color('white')
-        self.axs[0].set_title('Displacement vs Time').set_color('white')
+    # make available to other classes that want to use the subplot labels
+    @staticmethod
+    def set_subplot_labels(axs):
 
-        self.axs[1].set_xlabel('X Trajectory (m)').set_color('white')
-        self.axs[1].set_ylabel('Y Trajectory (m)').set_color('white')
-        self.axs[1].set_title('Trajectory').set_color('white')
-        self.axs[1].set_aspect('equal', adjustable='datalim')
+        axs[0].set_xlabel('Time (sec)').set_color('white')
+        axs[0].set_ylabel('Displacement (m)').set_color('white')
+        axs[0].set_title('Displacement vs Time').set_color('white')
 
-        self.axs[2].set_xlabel('Time (sec)').set_color('white')
-        self.axs[2].set_ylabel('Heading (deg)').set_color('white')
-        self.axs[2].set_title('Heading vs Time').set_color('white')
+        axs[1].set_xlabel('X Trajectory (m)').set_color('white')
+        axs[1].set_ylabel('Y Trajectory (m)').set_color('white')
+        axs[1].set_title('Trajectory').set_color('white')
+        axs[1].set_aspect('equal', adjustable='datalim')
 
-        self.axs[3].set_xlabel('Time (sec)').set_color('white')
-        self.axs[3].set_ylabel('Velocity (m/s)').set_color('white')
-        self.axs[3].set_title('Velocity vs Time').set_color('white')
+        axs[2].set_xlabel('Time (sec)').set_color('white')
+        axs[2].set_ylabel('Heading (deg)').set_color('white')
+        axs[2].set_title('Heading vs Time').set_color('white')
+
+        axs[3].set_xlabel('Time (sec)').set_color('white')
+        axs[3].set_ylabel('Velocity (m/s)').set_color('white')
+        axs[3].set_title('Velocity vs Time').set_color('white')
 
     def populate_metadata(self, data):
 
@@ -385,7 +388,7 @@ class ViewData:
         self.axs[2].plot(data['elapsed_time_s'], data['heading_deg'])
         self.axs[3].plot(data['elapsed_time_s'], data['velocity'])
 
-        self.set_subplot_labels()
+        self.set_subplot_labels(self.axs)
 
         self.canvas.draw()
         self.canvas.flush_events()  
