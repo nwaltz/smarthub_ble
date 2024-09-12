@@ -1,0 +1,276 @@
+from view_data_tab import ViewData
+from record_data_tab import RecordData
+
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+from matplotlib.ticker import MultipleLocator
+
+import asyncio
+import tkinter as tk
+from tkinter import font, ttk, Label
+import threading
+import pandas as pd
+import struct
+import numpy as np
+import time
+from bleak import BleakScanner, BleakClient, BleakError
+
+from base_ble.params import DATE_DIR, DATE_NOW, left_gain, left_offset, right_gain, right_offset
+
+from base_ble.calc import (
+    get_displacement_m,
+    get_distance_m,
+    get_velocity_m_s,
+    get_heading_deg,
+    get_top_traj
+)
+
+class Calibrate:
+
+    def __init__(self, tab):
+        self.tab = tab
+
+        self.create_widgets()
+
+        self.data = {
+            'gyro_right': [],
+            'gyro_left': [],
+            'time_from_start': [],
+            'gyro_right_smoothed': [],
+            'gyro_left_smoothed': [],
+            'dist_m': [],
+            'disp_m': [],
+            'heading_deg': [],
+            'velocity': [],
+            'trajectory': []
+        }
+
+        self.recording_started = False
+        self.recording_stopped = True
+
+    def next_calibration_step(self):
+        pass
+    
+
+    async def connect_to_device(self, left_address, right_address):
+        try:
+            async with BleakClient(left_address) as left_client:
+                self.left_smarthub_connection['text'] = 'Connected'
+                self.left_smarthub_connection['foreground'] = '#217346'
+                async with BleakClient(right_address) as right_client:
+                    self.right_smarthub_connection['text'] = 'Connected'
+                    self.right_smarthub_connection['foreground'] = '#217346'
+
+                    ch = "00002a56-0000-1000-8000-00805f9b34fb"
+
+                    # await left_client.start_notify(ch, self.update_data, side='left')
+                    self.start_recording_button['state'] = 'normal'
+
+                    initial_loop = True
+                    while True:
+                        if self.recording_started == False:
+                            self.recording_stopped = False
+                            await asyncio.sleep(0)
+                            continue
+
+                        if self.recording_stopped == True:
+                            self.recording_started = False
+                            # await left_client.stop_notify(ch)
+                            # await right_client.stop_notify(ch)
+
+                            # update_graphs_thread.join()
+                            break
+
+                        if initial_loop:
+                            self.start_time = time.time()
+                            initial_loop = False
+
+                            # update_graphs_thread = threading.Thread(target=self.update_graphs, daemon=True)
+                            # update_graphs_thread.start()
+
+                        # await left_client.start_notify(ch, self.update_data, side='left')
+                        # await right_client.start_notify(ch, self.update_data, side='right')
+
+                        read_message_left = await left_client.read_gatt_char(ch)
+                        read_message_right = await right_client.read_gatt_char(ch)
+
+                        self.parse_data(read_message_left, read_message_right)
+
+                        if time.time() - self.start_time > 2:
+                            if not left_client.is_connected:
+                                self.left_smarthub_connection['text'] = 'Disconnected'
+                                self.left_smarthub_connection['foreground'] = '#a92222'
+                                print('left not connected')
+                                await right_client.disconnect()
+                                break
+                            if not right_client.is_connected:
+                                self.right_smarthub_connection['text'] = 'Disconnected'
+                                self.right_smarthub_connection['foreground'] = '#a92222'
+                                print('right not connected')
+                                await left_client.disconnect()
+                                break
+
+        except BleakError as e:
+            print(f"Failed to connect: {e}")
+        except TimeoutError as e:
+            print(f"Timeout error: {e}")
+        except OSError as e:
+            print(f"OS error (devices are most likely disconnected): {e}")
+
+        # self.save_data()
+
+
+    def parse_data(self, left_message, right_message):
+        time_curr = time.time() - self.start_time
+        time_vals = []
+        if not hasattr(self, 'last_time'):
+            self.last_time = time_curr
+            return
+        for i in range(1, 5):
+            time_vals.append(i * (time_curr - self.last_time) / 4 + self.last_time)
+
+        self.last_time = time_curr
+
+        left_accel_data, left_gyro_data = RecordData.convert_from_raw(left_message)
+        right_accel_data, right_gyro_data = RecordData.convert_from_raw(right_message)
+
+
+        self.data['gyro_left'].extend(left_gyro_data)
+        self.data['gyro_right'].extend(right_gyro_data)
+        self.data['time_from_start'].extend(time_vals)
+
+        print(f"Left: {left_gyro_data}")
+        print(f"Right: {right_gyro_data}")
+        print()
+
+    def missing_smarthubs(self, left=False, right=False):
+        popup = tk.Toplevel()
+
+        screen_width = tk.Tk().winfo_screenwidth()
+        screen_height = tk.Tk().winfo_screenheight()
+
+        # popup.geometry("300x150")
+        popup.geometry(f"+{int(screen_width/2-250)}+{int(screen_height/2-250)}")
+
+        if left==True:
+            ttk.Label(popup, text="Left Smarthub not found", font=font.Font(size=14)).grid(row=0, column=0, pady=10, padx=50, columnspan=3)
+        if right==True:
+            ttk.Label(popup, text="Right Smarthub not found", font=font.Font(size=14)).grid(row=1, column=0, pady=10, padx=50, columnspan=3)
+
+        close_button = ttk.Button(popup, text="Close", command=popup.destroy)
+        close_button.grid(row=2, column=0, pady=10, columnspan=3)
+
+    async def _find_smarthubs(self, smarthub_id):
+        self.left_smarthub_connection['text'] = 'Disconnected'
+        self.left_smarthub_connection['foreground'] = '#a92222'
+        self.right_smarthub_connection['text'] = 'Disconnected'
+        self.right_smarthub_connection['foreground'] = '#a92222'
+
+        devices = await BleakScanner.discover(timeout=5.0)
+        smarthub_id = "9999"
+        left_address = None
+        right_address = None
+        for d in devices:
+            print(d)
+            if isinstance(d.name, str):
+                if f'Left Smarthub: {smarthub_id}' == d.name:
+                    print("Left Smarthub Identified")
+                    left_address = d.address
+                if f'Right Smarthub: {smarthub_id}' == d.name:
+                    print("Right Smarthub Identified")
+                    right_address = d.address
+        
+        if left_address is None or right_address is None:
+            self.missing_smarthubs(left=left_address is None, right=right_address is None)
+            print('smarthub not found')
+            if left_address is not None:
+                self.left_smarthub_connection['text'] = 'Connected'
+                self.left_smarthub_connection['foreground'] = '#217346'
+            
+            if right_address is not None:
+                self.right_smarthub_connection['text'] = 'Connected'
+                self.right_smarthub_connection['foreground'] = '#217346'
+            return
+        try:
+            await self.connect_to_device(left_address, right_address)
+        except BleakError:
+            print("Device went out of range, retrying...")
+            await asyncio.sleep(10)  # Wait before retrying
+
+    def connect_smarthubs(self, smarthub_id):
+        def ble_task():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(self._find_smarthubs(smarthub_id))
+            loop.close()
+
+        ble_thread = threading.Thread(target=ble_task, daemon=True)
+        ble_thread.start()
+
+    def start_recording(self):
+        if self.start_recording_button['text'] == 'Start Recording':
+            print('recording started')
+            self.recording_started = True
+
+
+            self.start_recording_button['text'] = 'Stop Recording'
+        elif self.start_recording_button['text'] == 'Stop Recording':
+            print('recording stopped')
+            self.recording_stopped = True
+
+            self.start_recording_button['text'] = 'Start Recording'
+
+    def create_widgets(self):
+        style = ttk.Style()
+
+        ttk.Label(self.tab, text="Input SmartHub ID: ", justify='center', font=font.Font(size=14))\
+            .grid(row=0, column=0, pady=10, columnspan=3)
+        smarthub_id = ttk.Entry(self.tab, width=10, font=font.Font(size=12))
+        smarthub_id.grid(row=1, column=0, pady=10, columnspan=2, sticky='nsew')
+        ttk.Button(self.tab, text='Connect', command=lambda: self.connect_smarthubs(smarthub_id.get())).grid(row=1, column=2, pady=10, sticky='nsew')
+        smarthub_id.bind('<Return>', lambda event: self.connect_smarthubs(smarthub_id.get()))
+
+        ttk.Label(self.tab, text="Left Smarthub: ", justify='center', font=font.Font(size=14))\
+            .grid(row=2, column=0, pady=10, columnspan=2)
+        ttk.Label(self.tab, text="Right Smarthub: ", justify='center', font=font.Font(size=14))\
+            .grid(row=3, column=0, pady=10, columnspan=2)
+
+        self.left_smarthub_connection = ttk.Label(self.tab, text="Disconnected", justify='center', font=font.Font(size=14), foreground='#a92222')
+        self.left_smarthub_connection.grid(row=2, column=2, pady=10, columnspan=1)
+        self.right_smarthub_connection = ttk.Label(self.tab, text="Disconnected", justify='center', font=font.Font(size=14), foreground='#a92222')
+        self.right_smarthub_connection.grid(row=3, column=2, pady=10, columnspan=1)
+
+        ttk.Separator(self.tab, orient='horizontal').grid(row=4, column=0, pady=10, columnspan=3, sticky='sew')
+
+        style.configure('Custom.TButton', font=('Helvetica', 14), background='#217346', foreground='whitesmoke')
+        style.map('Custom.TButton', background=[('disabled', '#a9a9a9'), ('!disabled', '#217346')], foreground=[('disabled', 'gray'),('!disabled', 'whitesmoke')])
+
+        self.start_recording_button = ttk.Button(self.tab, text='Start Recording', command=lambda: self.start_recording(), state='disabled', style='Custom.TButton')
+        self.start_recording_button.grid(row=9, column=0, pady=10, columnspan=3, sticky='nsew')
+
+        self.tab.columnconfigure(0, minsize=50)
+        self.tab.columnconfigure(1, minsize=100)
+        self.tab.columnconfigure(2, minsize=100)
+
+        self.create_graphs()
+
+    def create_graphs(self):
+        dpi = 100
+        if not hasattr(self, 'fig'):
+            screen_width = self.tab.winfo_screenwidth()
+            screen_height = self.tab.winfo_screenheight()
+
+            self.fig = Figure(figsize=((screen_width-400)/dpi, (screen_height-200)/dpi), dpi=dpi)
+
+            # self.fig.tick_params(colors='white')
+            # ax.set_facecolor(str(ttk.Style().lookup('TFrame', 'foreground')))
+            self.fig.set_facecolor('whitesmoke')
+
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.tab)
+
+        self.tab.columnconfigure(3, minsize=100)
+
+        self.canvas.get_tk_widget().grid(row=2, column=4, columnspan=100, rowspan=100, padx=0, pady=0, sticky='nsew')
+
+        
+
