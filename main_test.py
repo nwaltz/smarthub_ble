@@ -8,6 +8,7 @@ import asyncio
 
 from view_data_tab import ViewData
 from record_data_tab import RecordData
+from calibrate_tab import Calibrate
 
 if getattr(sys, 'frozen', False):
     # Running in a bundle
@@ -59,6 +60,7 @@ def initalize_gui():
 
     ViewData(view_data_tab)
     RecordData(record_data_tab)
+    Calibrate(calibrate_tab)
 
     root.mainloop()
 
