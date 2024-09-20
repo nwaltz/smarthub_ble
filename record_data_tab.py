@@ -24,6 +24,8 @@ from base_ble.calc import (
     get_top_traj
 )
 
+from scipy.fftpack import fftfreq, irfft, rfft
+
 class RecordData:
 
     def __init__(self, tab):
@@ -164,22 +166,45 @@ class RecordData:
                 self.tab.after(200, self.update_graphs)
             return
 
-        N_win = 15
-        # Padding the data
-        gyro_right_padded = np.pad(self.data['gyro_right'], (N_win//2, N_win-1-N_win//2), mode='edge')
-        # Smoothing using moving average
-        gyro_right_smoothed = np.convolve(gyro_right_padded, np.ones(N_win)/N_win, mode='valid')
+        # Filtering with low pass filter
+        filter_freq =  6
+        # Calculate fourier transform of right gyroscope data to convert to frequency domain
+        W_right = fftfreq(self.data['gyro_right'].size, d=self.data['time_from_start'][1]-self.data['time_from_start'][0])
+        f_gyro_right = rfft(self.data['gyro_right'])
+        # Filter out right gyroscope signal above 6 Hz
+        f_right_filtered = f_gyro_right.copy()
+        f_right_filtered[(np.abs(W_right)>filter_freq)] = 0
+        # convert filtered signal back to time domain
+        gyro_right_smoothed = irfft(f_right_filtered)
 
-        # Converting back to list
-        self.data['gyro_right_smoothed'] = list(gyro_right_smoothed)
+        # Calculate fourier transform of right gyroscope data to convert to frequency domain
+        W_left = fftfreq(self.data['gyro_left'].size, d=self.data['time_from_start'][1]-self.data['time_from_start'][0])
+        f_gyro_left = rfft(self.data['gyro_left'])
+        # Filter out right gyroscope signal above 6 Hz
+        f_left_filtered = f_gyro_left.copy()
+        f_left_filtered[(np.abs(W_left)>filter_freq)] = 0
+        # convert filtered signal back to time domain
+        gyro_left_smoothed = irfft(f_left_filtered)
 
-        # Padding the data
-        gyro_left_padded = np.pad(self.data['gyro_left'], (N_win//2, N_win-1-N_win//2), mode='edge')
-        # Smoothing using moving average
-        gyro_left_smoothed = np.convolve(gyro_left_padded, np.ones(N_win)/N_win, mode='valid')
+        # Filtering with moving average
 
-        # Converting back to list
-        self.data['gyro_left_smoothed'] = list(gyro_left_smoothed)
+        # N_win = 15
+        # # Padding the data
+        # gyro_right_padded = np.pad(self.data['gyro_right'], (N_win//2, N_win-1-N_win//2), mode='edge')
+        # # Smoothing using moving average
+        # gyro_right_smoothed = np.convolve(gyro_right_padded, np.ones(N_win)/N_win, mode='valid')
+        #
+        # # Converting back to list
+        # self.data['gyro_right_smoothed'] = list(gyro_right_smoothed)
+        #
+        #
+        # # Padding the data
+        # gyro_left_padded = np.pad(self.data['gyro_left'], (N_win//2, N_win-1-N_win//2), mode='edge')
+        # # Smoothing using moving average
+        # gyro_left_smoothed = np.convolve(gyro_left_padded, np.ones(N_win)/N_win, mode='valid')
+        #
+        # # Converting back to list
+        # self.data['gyro_left_smoothed'] = list(gyro_left_smoothed)
 
         # Derive distance based on data:
         self.data['dist_m'][:] = get_distance_m(self.data['time_from_start'], gyro_left_smoothed,
