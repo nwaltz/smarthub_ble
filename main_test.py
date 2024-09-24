@@ -4,11 +4,15 @@ from retrieve_data import *
 import multiprocessing as mp
 import sys
 import os
+import cred
 import asyncio
 
 from view_data_tab import ViewData
 from record_data_tab import RecordData
 from calibrate_tab import Calibrate
+
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
 
 if getattr(sys, 'frozen', False):
     # Running in a bundle
@@ -21,6 +25,15 @@ else:
 
 def end_fullscreen(root=None):
         root.attributes("-fullscreen", False)
+
+def connect_to_db():
+    username = cred.username
+    password = cred.password
+    
+    uri = f"mongodb+srv://{username}:{password}@smarthub.gbdlpxs.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri, server_api=ServerApi('1'))
+    smarthub_db = client.Smarthub
+    return smarthub_db
 
 def initalize_gui():
     root = Tk()
@@ -58,9 +71,11 @@ def initalize_gui():
     notebook.add(record_data_tab, text="Record Data")
     notebook.add(calibrate_tab, text="Calibrate")
 
-    ViewData(view_data_tab)
-    RecordData(record_data_tab)
-    Calibrate(calibrate_tab)
+    db = connect_to_db()
+
+    ViewData(view_data_tab, database=db)
+    RecordData(record_data_tab, database=db)
+    Calibrate(calibrate_tab, database=db)
 
     root.mainloop()
 

@@ -1,6 +1,8 @@
 from view_data_tab import ViewData
 from record_data_tab import RecordData
 
+from scipy.optimize import minimize, fsolve
+
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from matplotlib.ticker import MultipleLocator
@@ -13,9 +15,12 @@ import pandas as pd
 import struct
 import numpy as np
 import time
+import json
 from bleak import BleakScanner, BleakClient, BleakError
 
 from base_ble.params import DATE_DIR, DATE_NOW, left_gain, left_offset, right_gain, right_offset
+
+from base_ble.calibrate import minimize_function
 
 from base_ble.calc import (
     get_displacement_m,
@@ -25,9 +30,19 @@ from base_ble.calc import (
     get_top_traj
 )
 
+def draw_grid_lines(tab):
+    rows, cols = tab.grid_size()
+    # for i in range(rows):
+    #     ttk.Separator(tab, orient='horizontal').grid(row=i, column=0, columnspan=cols, sticky='sew')
+    
+    # for i in range(rows):
+    #     ttk.Separator(tab, orient='horizontal').grid(row=i, column=0, columnspan=cols, sticky='sew')
+    for i in range(100):
+        ttk.Separator(tab, orient='vertical').grid(row=0, column=i, rowspan=rows, sticky='nse')
+
 class Calibrate:
 
-    def __init__(self, tab):
+    def __init__(self, tab, database):
         self.tab = tab
 
         self.create_widgets()
@@ -48,9 +63,98 @@ class Calibrate:
         self.recording_started = False
         self.recording_stopped = True
 
+        self.calibration_sequence = []
+        self.current_calibration_step = 0
+
+        self.set_calibration_sequence()
+
+    def set_calibration_sequence(self):
+        self.calibration_sequence.append({'name': 'start', 
+                                          'text': 'Move the wheelchair to the starting position.  Set the left wheel on the end tape.',
+                                          'time_from_start': [],
+                                          'gyro_left': [],
+                                          'gyro_right': []})
+        
+        self.calibration_sequence.append({'name': 'pause1', 
+                                          'text': 'Wait for at least 5 seconds with the left wheel on the tape.  Do not move the wheelchair.',
+                                          'time_from_start': [],
+                                          'gyro_left': [],
+                                          'gyro_right': []})
+        
+        self.calibration_sequence.append({'name': 'forward1', 
+                                          'text': 'Move the wheelchair forward 10 meters. Keep the the left wheel on the tape.',
+                                          'time_from_start': [],
+                                          'gyro_left': [],
+                                          'gyro_right': []})
+        
+        self.calibration_sequence.append({'name': 'turnleft1',
+                                          'text': 'Turn the wheelchair 180 degrees, keeping the left wheel on the tape.',
+                                          'time_from_start': [],
+                                          'gyro_left': [],
+                                          'gyro_right': []})
+        
+        self.calibration_sequence.append({'name': 'forward2',
+                                          'text': 'Move the wheelchair forward 10 meters. Keep the the left wheel on the tape.',
+                                          'time_from_start': [],
+                                          'gyro_left': [],
+                                          'gyro_right': []})
+        
+        self.calibration_sequence.append({'name': 'turnleft2',
+                                          'text': 'Turn the wheelchair 180 degrees, keeping the left wheel on the tape.',
+                                          'time_from_start': [],
+                                          'gyro_left': [],
+                                          'gyro_right': []})
+        
+        self.calibration_sequence.append({'name': 'setposition',
+                                          'text': 'The wheelchair should currently be in the starting position.  Set the right wheel on the tape.',
+                                          'time_from_start': [],
+                                          'gyro_left': [],
+                                          'gyro_right': []})
+        
+        self.calibration_sequence.append({'name': 'pause2',
+                                          'text': 'Wait for at least 5 seconds with the right wheel on the tape.  Do not move the wheelchair.',
+                                          'time_from_start': [],
+                                          'gyro_left': [],
+                                          'gyro_right': []})
+        
+        self.calibration_sequence.append({'name': 'forward3',
+                                          'text': 'Move the wheelchair forward 10 meters. Keep the the right wheel on the tape.',
+                                          'time_from_start': [],
+                                          'gyro_left': [],
+                                          'gyro_right': []})
+        
+        self.calibration_sequence.append({'name': 'turnright1',
+                                          'text': 'Turn the wheelchair 180 degrees, keeping the right wheel on the tape.',
+                                          'time_from_start': [],
+                                          'gyro_left': [],
+                                          'gyro_right': []})
+        
+        self.calibration_sequence.append({'name': 'forward4',
+                                          'text': 'Move the wheelchair forward 10 meters. Keep the the right wheel on the tape.',
+                                          'time_from_start': [],
+                                          'gyro_left': [],
+                                          'gyro_right': []})
+        
+        self.calibration_sequence.append({'name': 'turnright2',
+                                          'text': 'Turn the wheelchair 180 degrees, keeping the right wheel on the tape.',
+                                          'time_from_start': [],
+                                          'gyro_left': [],
+                                          'gyro_right': []})
+        
+        self.calibration_sequence.append({'name': 'end',
+                                          'text': 'The wheelchair should be in the starting position.  Press "END" to save calibration.',
+                                          'time_from_start': [],
+                                          'gyro_left': [],
+                                          'gyro_right': []})
+        
     def next_calibration_step(self):
+        self.current_calibration_step += 1
+        self.update_calibration_display()
         pass
-    
+
+    def update_calibration_display(self):
+        self.calibration_title['text'] = self.calibration_sequence[self.current_calibration_step]['text']
+
 
     async def connect_to_device(self, left_address, right_address):
         try:
@@ -114,8 +218,16 @@ class Calibrate:
             print(f"Failed to connect: {e}")
         except TimeoutError as e:
             print(f"Timeout error: {e}")
+            if self.left_smarthub_connection['text'] != 'Connected' and self.right_smarthub_connection['text'] != 'Connected':
+                self.missing_smarthubs(left=True, right=True)
+            if self.left_smarthub_connection['text'] != 'Connected':
+                self.missing_smarthubs(left=True)
+            if self.right_smarthub_connection['text'] != 'Connected':
+                self.missing_smarthubs(right=True)
         except OSError as e:
             print(f"OS error (devices are most likely disconnected): {e}")
+
+        self.save_data()
 
         # self.save_data()
 
@@ -135,9 +247,9 @@ class Calibrate:
         right_accel_data, right_gyro_data = RecordData.convert_from_raw(right_message)
 
 
-        self.data['gyro_left'].extend(left_gyro_data)
-        self.data['gyro_right'].extend(right_gyro_data)
-        self.data['time_from_start'].extend(time_vals)
+        self.calibration_sequence[self.current_calibration_step]['gyro_left'].extend(left_gyro_data)
+        self.calibration_sequence[self.current_calibration_step]['gyro_right'].extend(right_gyro_data)
+        self.calibration_sequence[self.current_calibration_step]['time_from_start'].extend(time_vals)
 
         print(f"Left: {left_gyro_data}")
         print(f"Right: {right_gyro_data}")
@@ -166,7 +278,7 @@ class Calibrate:
         self.right_smarthub_connection['text'] = 'Disconnected'
         self.right_smarthub_connection['foreground'] = '#a92222'
 
-        devices = await BleakScanner.discover(timeout=5.0)
+        devices = await BleakScanner.discover(timeout=10.0)
         smarthub_id = "9999"
         left_address = None
         right_address = None
@@ -207,18 +319,40 @@ class Calibrate:
         ble_thread = threading.Thread(target=ble_task, daemon=True)
         ble_thread.start()
 
-    def start_recording(self):
-        if self.start_recording_button['text'] == 'Start Recording':
-            print('recording started')
+    def start_calibration(self):
+        if self.start_recording_button['text'] == 'Start Calibration':
+            print('calibration started')
             self.recording_started = True
 
 
-            self.start_recording_button['text'] = 'Stop Recording'
-        elif self.start_recording_button['text'] == 'Stop Recording':
-            print('recording stopped')
-            self.recording_stopped = True
+            self.start_recording_button['text'] = 'Next Step'
 
-            self.start_recording_button['text'] = 'Start Recording'
+        elif self.start_recording_button['text'] == 'Next Step':
+            print('next step')
+            # self.recording_stopped = True
+
+            if self.current_calibration_step == len(self.calibration_sequence) - 1:
+                self.start_recording_button['text'] = 'End Calibration'
+
+            else:
+                self.next_calibration_step()
+
+        if self.start_recording_button['text'] == 'End Calibration':
+            self.recording_stopped = True
+            self.start_recording_button['state'] = 'disabled'
+            self.save_data()
+
+    def perform_calibration(self):
+        res = fsolve(minimize_function, [20,20,1,1], args=self.calibration_sequence)
+
+    def save_data(self):
+        # save dictionary to json
+
+        with open("data.json", "w") as json_file:
+            json.dump(self.calibration_sequence, json_file, indent=4)
+
+        
+       
 
     def create_widgets(self):
         style = ttk.Style()
@@ -245,7 +379,7 @@ class Calibrate:
         style.configure('Custom.TButton', font=('Helvetica', 14), background='#217346', foreground='whitesmoke')
         style.map('Custom.TButton', background=[('disabled', '#a9a9a9'), ('!disabled', '#217346')], foreground=[('disabled', 'gray'),('!disabled', 'whitesmoke')])
 
-        self.start_recording_button = ttk.Button(self.tab, text='Start Recording', command=lambda: self.start_recording(), state='disabled', style='Custom.TButton')
+        self.start_recording_button = ttk.Button(self.tab, text='Start Calibration', command=lambda: self.start_calibration(), state='disabled', style='Custom.TButton')
         self.start_recording_button.grid(row=9, column=0, pady=10, columnspan=3, sticky='nsew')
 
         self.tab.columnconfigure(0, minsize=50)
@@ -253,6 +387,11 @@ class Calibrate:
         self.tab.columnconfigure(2, minsize=100)
 
         self.create_graphs()
+
+        self.calibration_title = ttk.Label(self.tab, text="Connect Smarthubs to Start Calibration", justify='center', font=font.Font(size=14))
+        self.calibration_title.grid(row=0, column=4, pady=10, columnspan=100, rowspan=2)
+
+        # draw_grid_lines(self.tab)
 
     def create_graphs(self):
         dpi = 100
