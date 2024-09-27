@@ -44,6 +44,7 @@ class Calibrate:
 
     def __init__(self, tab, database):
         self.tab = tab
+        self.test_config = database.test_config
 
         self.create_widgets()
 
@@ -170,6 +171,41 @@ class Calibrate:
                     # await left_client.start_notify(ch, self.update_data, side='left')
                     self.start_recording_button['state'] = 'normal'
 
+                    self.new_data_left = None
+                    self.new_data_right = None
+
+                    def update_data(_, data, side):
+                        if not hasattr(self, 'last_left_message'):
+                            self.last_left_message = None
+                            self.last_right_message = None
+                            self.last_time = time.time()
+
+                        if side == 'left':
+                            if self.last_left_message != data:
+                                self.last_left_message = data
+                                self.new_data_left = data
+                                if self.new_data_right is not None:
+                                    self.parse_data(self.new_data_left, self.new_data_right)
+                                    self.new_data_left = None
+                                    self.new_data_right = None
+                        elif side == 'right':
+                            if self.last_right_message != data:
+                                self.last_right_message = data
+                                self.new_data_right = data
+                                if self.new_data_left is not None:
+                                    self.parse_data(self.new_data_left, self.new_data_right)
+                                    self.new_data_left = None
+                                    self.new_data_right = None
+                            pass
+
+                    async def start_notifications(self, left_client, right_client, ch):
+                        left_rssi = await left_client.get_rssi()
+                        right_rssi = await right_client.get_rssi()
+                        print("Left Strength:", left_rssi)
+                        print("Right Strength:", right_rssi)
+                        await left_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'left'))
+                        await right_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'right'))
+
                     initial_loop = True
                     while True:
                         if self.recording_started == False:
@@ -179,11 +215,14 @@ class Calibrate:
 
                         if self.recording_stopped == True:
                             self.recording_started = False
-                            # await left_client.stop_notify(ch)
-                            # await right_client.stop_notify(ch)
+                            await left_client.stop_notify(ch)
+                            await right_client.stop_notify(ch)
 
                             # update_graphs_thread.join()
                             break
+                        else:
+                            await left_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'left'))
+                            await right_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'right'))
 
                         if initial_loop:
                             self.start_time = time.time()
@@ -192,13 +231,15 @@ class Calibrate:
                             # update_graphs_thread = threading.Thread(target=self.update_graphs, daemon=True)
                             # update_graphs_thread.start()
 
-                        # await left_client.start_notify(ch, self.update_data, side='left')
-                        # await right_client.start_notify(ch, self.update_data, side='right')
+                        # await left_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'left'))
+                        # await right_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'right'))
 
-                        read_message_left = await left_client.read_gatt_char(ch)
-                        read_message_right = await right_client.read_gatt_char(ch)
+                        # read_message_left = await left_client.read_gatt_char(ch)
+                        # read_message_right = await right_client.read_gatt_char(ch)
 
-                        self.parse_data(read_message_left, read_message_right)
+                        # self.parse_data(read_message_left, read_message_right)
+                        await start_notifications(self, left_client, right_client, ch)
+                        await asyncio.sleep(1)
 
                         if time.time() - self.start_time > 2:
                             if not left_client.is_connected:
@@ -216,6 +257,13 @@ class Calibrate:
 
         except BleakError as e:
             print(f"Failed to connect: {e}")
+            popup = tk.Toplevel()
+            ttk.Label(popup, text="Device went out of range, please retry connection", font=font.Font(size=14)).grid(row=0, column=0, pady=10, padx=50, columnspan=3)
+            return
+        except OSError as e:
+            popup = tk.Toplevel()
+            ttk.Label(popup, text="Device went out of range, please retry connection", font=font.Font(size=14)).grid(row=0, column=0, pady=10, padx=50, columnspan=3)
+            return
         except TimeoutError as e:
             print(f"Timeout error: {e}")
             if self.left_smarthub_connection['text'] != 'Connected' and self.right_smarthub_connection['text'] != 'Connected':
@@ -227,7 +275,7 @@ class Calibrate:
         except OSError as e:
             print(f"OS error (devices are most likely disconnected): {e}")
 
-        self.save_data()
+        # self.perform_calibration()
 
         # self.save_data()
 
@@ -251,9 +299,9 @@ class Calibrate:
         self.calibration_sequence[self.current_calibration_step]['gyro_right'].extend(right_gyro_data)
         self.calibration_sequence[self.current_calibration_step]['time_from_start'].extend(time_vals)
 
-        print(f"Left: {left_gyro_data}")
-        print(f"Right: {right_gyro_data}")
-        print()
+        # print(f"Left: {left_gyro_data}")
+        # print(f"Right: {right_gyro_data}")
+        # print()
 
     def missing_smarthubs(self, left=False, right=False):
         popup = tk.Toplevel()
@@ -279,7 +327,6 @@ class Calibrate:
         self.right_smarthub_connection['foreground'] = '#a92222'
 
         devices = await BleakScanner.discover(timeout=10.0)
-        smarthub_id = "9999"
         left_address = None
         right_address = None
         for d in devices:
@@ -304,6 +351,7 @@ class Calibrate:
                 self.right_smarthub_connection['foreground'] = '#217346'
             return
         try:
+            self.smarthub_id = smarthub_id
             await self.connect_to_device(left_address, right_address)
         except BleakError:
             print("Device went out of range, retrying...")
@@ -339,17 +387,58 @@ class Calibrate:
 
         if self.start_recording_button['text'] == 'End Calibration':
             self.recording_stopped = True
-            self.start_recording_button['state'] = 'disabled'
-            self.save_data()
+            # self.start_recording_button['state'] = 'disabled'
+            self.perform_calibration()
 
     def perform_calibration(self):
         res = fsolve(minimize_function, [20,20,1,1], args=self.calibration_sequence)
 
-    def save_data(self):
+        print(res)
+
+        diameter = res[0]
+        wheel_dist = res[1]
+        left_gain = res[2]
+        right_gain = res[3]
+
+        popup = tk.Toplevel()
+
+        screen_width = tk.Tk().winfo_screenwidth()
+        screen_height = tk.Tk().winfo_screenheight()
+
+        # popup.geometry("300x150")
+        popup.geometry(f"+{int(screen_width/2-250)}+{int(screen_height/2-250)}")
+
+        ttk.Label(popup, text=f"Calibration Results", font=font.Font(size=14)).grid(row=0, column=0, pady=10, padx=50, columnspan=3)
+        ttk.Label(popup, text=f"Diameter: {diameter:2f}", font=font.Font(size=14)).grid(row=1, column=0, pady=10, padx=50, columnspan=3)
+        ttk.Label(popup, text=f"Wheel Distance: {wheel_dist:2f}", font=font.Font(size=14)).grid(row=2, column=0, pady=10, padx=50, columnspan=3)
+        ttk.Label(popup, text=f"Left Gain: {left_gain:2f}", font=font.Font(size=14)).grid(row=3, column=0, pady=10, padx=50, columnspan=3)
+        ttk.Label(popup, text=f"Right Gain: {right_gain:2f}", font=font.Font(size=14)).grid(row=4, column=0, pady=10, padx=50, columnspan=3)
+        calibration_name = ttk.Entry(popup, width=10)
+        calibration_name.grid(row=5, column=0, pady=10, padx=50, columnspan=3)
+        ttk.Button(popup, text="Save Calibration", command=lambda: self.save_calibration(popup, diameter, wheel_dist, left_gain, right_gain, calibration_name.get())).grid(row=6, column=0, pady=10, padx=50, columnspan=3)
+        ttk.Button(popup, text="Don't Save", command=popup.destroy).grid(row=6, column=0, pady=10, padx=50, columnspan=3)
+
+    def save_calibration(self, popup, diameter, wheel_dist, left_gain, right_gain, calibration_name):
         # save dictionary to json
+        popup.destroy()
 
         with open("data.json", "w") as json_file:
             json.dump(self.calibration_sequence, json_file, indent=4)
+
+        post = {
+            'smarthub_id': self.smarthub_id,
+            'calibration_name': calibration_name,
+            'diameter': diameter,
+            'wheel_dist': wheel_dist,
+            'left_gain': left_gain,
+            'right_gain': right_gain,
+            'date': DATE_NOW,
+            'calibration_sequence': self.calibration_sequence
+        }
+
+        id = self.test_config.insert_one(post).inserted_id
+
+        print('successfully saved calibration')
 
         
        

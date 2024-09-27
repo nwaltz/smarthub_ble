@@ -41,8 +41,9 @@ def draw_grid_lines(tab):
 
 class ViewData:
 
-    def __init__(self, tab):
+    def __init__(self, tab, database):
         self.tab = tab
+        self.test_collection = database.test_collection
 
         self.last_scale_update = time.time()
         self.overlay = tk.BooleanVar(value=False)
@@ -423,7 +424,7 @@ class ViewData:
                     self.axs[1].xaxis.set_major_locator(MultipleLocator(tick_spacing))
                     self.axs[1].yaxis.set_major_locator(MultipleLocator(tick_spacing))
 
-            self.set_subplot_labels()
+            self.set_subplot_labels(self.axs)
 
             for ax in self.axs:
                 ax.relim()
@@ -517,10 +518,10 @@ class ViewData:
         username = cred.username
         password = cred.password
 
-        uri = f"mongodb+srv://{username}:{password}@smarthub.gbdlpxs.mongodb.net/?retryWrites=true&w=majority"
-        self.client = MongoClient(uri, server_api=ServerApi('1'))
-        smarthub_db = self.client.Smarthub
-        self.test_collection = smarthub_db.test_collection
+        # uri = f"mongodb+srv://{username}:{password}@smarthub.gbdlpxs.mongodb.net/?retryWrites=true&w=majority"
+        # self.client = MongoClient(uri, server_api=ServerApi('1'))
+        # smarthub_db = self.client.Smarthub
+        # self.test_collection = smarthub_db.test_collection
 
         if auto:
             self.find_test_runs('654321', auto=True)

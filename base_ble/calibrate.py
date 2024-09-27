@@ -4,13 +4,32 @@ import numpy as np
 import json
 import matplotlib.pyplot as plt
 
-from calc import (
-    get_displacement_m,
-    get_distance_m,
-    get_velocity_m_s,
-    get_heading_deg,
-    get_top_traj
-)
+try:
+    from base_ble.params import (
+        WHEEL_DIAM_IN,
+        DIST_WHEELS_IN,
+        IN_TO_M
+    )
+    from base_ble.calc import (
+        get_displacement_m,
+        get_distance_m,
+        get_velocity_m_s,
+        get_heading_deg,
+        get_top_traj
+    )
+except ModuleNotFoundError:
+    from params import (
+        WHEEL_DIAM_IN,
+        DIST_WHEELS_IN,
+        IN_TO_M
+    )
+    from calc import (
+        get_displacement_m,
+        get_distance_m,
+        get_velocity_m_s,
+        get_heading_deg,
+        get_top_traj
+    )
 
 def calibration_setup(calibration_list):
 
