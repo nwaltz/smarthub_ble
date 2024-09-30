@@ -79,8 +79,8 @@ def initalize_gui(db):
 
     # db = connect_to_db()
 
-    ViewData(view_data_tab, database=db)
-    RecordData(record_data_tab, database=db)
+    record_data_class = RecordData(record_data_tab, database=db)
+    ViewData(view_data_tab, record_data_class, database=db)
     Calibrate(calibrate_tab, database=db)
 
     root.mainloop()
@@ -120,9 +120,6 @@ def authenticate():
     root.mainloop()
 
 
-
-
-
 if __name__ == '__main__':
 
     pem_files = glob.glob('*.pem')
@@ -130,7 +127,7 @@ if __name__ == '__main__':
         valid_file = False
         for file in pem_files:
             try:
-                # print(file)
+                print('Authenticating with', file)
                 db = connect_to_db_certificate(file)
                 collections = db.list_collection_names()
                 valid_file = True

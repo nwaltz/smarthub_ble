@@ -41,8 +41,9 @@ def draw_grid_lines(tab):
 
 class ViewData:
 
-    def __init__(self, tab, database):
+    def __init__(self, tab, record_data_tab, database):
         self.tab = tab
+        self.record_data_tab = record_data_tab
         self.test_collection = database.test_collection
 
         self.last_scale_update = time.time()
@@ -221,7 +222,7 @@ class ViewData:
         test_name_entry = ttk.Entry(self.tab, textvariable=test_name_var, width=15, font=font.Font(size=12))
         if 'test_name' in data:
             test_name_var.set(data['test_name'])
-            test_name_var.set(data['_id'])
+            # test_name_var.set(data['_id'])
             # test_name_entry.insert(0, data['_id'])
         elif '_id' in data:
             test_name_var.set(data['_id'])
@@ -291,8 +292,14 @@ class ViewData:
         download_raw_data_button = ttk.Button(self.tab, text='Download Raw Data', command=lambda: self.download_raw_data(data))
         download_raw_data_button.grid(row=80, column=0, columnspan=3, sticky='nsew')
 
+        ttk.Separator(self.tab, orient='horizontal').grid(row=84, column=0, columnspan=3, sticky='new')
+
+        set_record_background_button = ttk.Button(self.tab, text='Set Record Background', command=lambda: self.set_record_background(data))
+        set_record_background_button.grid(row=88, column=0, columnspan=3, sticky='nsew')
 
 
+    def set_record_background(self, data):
+        self.record_data_tab.set_background(data)
         
     
     def show_data(self, event, dpi=100, gridlines=False, data=None):
