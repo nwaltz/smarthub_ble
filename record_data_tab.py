@@ -13,6 +13,7 @@ import pandas as pd
 import struct
 import numpy as np
 import time
+from datetime import datetime
 from bleak import BleakScanner, BleakClient, BleakError
 
 from base_ble.params import DATE_DIR, DATE_NOW, left_gain, left_offset, right_gain, right_offset, WHEEL_DIAM_IN, DIST_WHEELS_IN
@@ -178,6 +179,8 @@ class RecordData:
 
     def update_graphs(self):
 
+        update_frequency = 400
+
         if len(self.data['time_from_start']) < 1:
             if not self.recording_stopped:
                 self.tab.after(200, self.update_graphs)
@@ -189,13 +192,16 @@ class RecordData:
                 'gyro_right': copy.deepcopy(self.data['gyro_right'])}
         
         if len(data['time_from_start']) != len(data['gyro_left']):
-            print('Data length mismatch')
+            print('Data length mismatch at time', data['time_from_start'][-1])
+            self.tab.after(int(update_frequency/4), self.update_graphs)
             return
         if len(data['time_from_start']) != len(data['gyro_right']):
-            print('Data length mismatch')
+            print('Data length mismatch at time', data['time_from_start'][-1])
+            self.tab.after(int(update_frequency/4), self.update_graphs)
             return
         if len(data['gyro_left']) != len(data['gyro_right']):
-            print('Data length mismatch')
+            print('Data length mismatch at time', data['time_from_start'][-1])
+            self.tab.after(int(update_frequency/4), self.update_graphs)
             return
 
         # Filtering with low pass filter
@@ -300,7 +306,7 @@ class RecordData:
 
 
         if not self.recording_stopped:
-            self.tab.after(1000, self.update_graphs)
+            self.tab.after(update_frequency, self.update_graphs)
 
     def set_background(self, data):
         self.background_set = True
@@ -372,6 +378,9 @@ class RecordData:
                 async with BleakClient(right_address) as right_client:
                     self.right_smarthub_connection['text'] = 'Connected'
                     self.right_smarthub_connection['foreground'] = '#217346'
+
+                    if self.operator_id is not None:
+                        self.start_recording_button['state'] = 'normal'
 
                     ch = "00002a56-0000-1000-8000-00805f9b34fb"
 
@@ -594,6 +603,35 @@ class RecordData:
 
 
     def save_data(self):
+
+        test_datetime = datetime.now()
+        datetime_str = f"{test_datetime.month}/{test_datetime.day}/{test_datetime.year}_{test_datetime.hour}:{test_datetime.minute}"
+
+        time.sleep(0.1)
+        self.update_graphs()
+
+        # find shortest length of data
+        min_len = min(len(v) for v in self.data.values())
+
+        post = {}
+        post['_id'] = datetime_str
+        post['elapsed_time_s'] = self.data['time_from_start'][:min_len]
+        post['gyro_right'] = self.data['gyro_right'][:min_len]
+        post['gyro_left'] = self.data['gyro_left'][:min_len]
+        post['gyro_right_smoothed'] = self.data['gyro_right_smoothed'][:min_len]
+        post['gyro_left_smoothed'] = self.data['gyro_left_smoothed'][:min_len]
+        # post['accel_right'] = self.data['accel_right']
+        # post['accel_left'] = self.data['accel_left']
+        post['distance_m'] = self.data['dist_m'][:min_len]
+        post['heading_deg'] = self.data['heading_deg'][:min_len]
+        post['displacement_m'] = self.data['disp_m'][:min_len]
+        post['traj_x'] = [i[0] for i in self.data['trajectory']][:min_len]
+        post['traj_y'] = [i[1] for i in self.data['trajectory']][:min_len]
+        post['user_id'] = self.operator_id
+
+        id = self.test_collection.insert_one(post).inserted_id
+        
+
         max_len = max(len(v) for v in self.data.values())
 
         # Normalize the lengths of lists by filling with NaN

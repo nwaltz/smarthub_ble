@@ -1,3 +1,4 @@
 smarthub/
 __pycache__/
 build/
+arduino-cli.exe

@@ -199,10 +199,6 @@ class Calibrate:
                             pass
 
                     async def start_notifications(self, left_client, right_client, ch):
-                        left_rssi = await left_client.get_rssi()
-                        right_rssi = await right_client.get_rssi()
-                        print("Left Strength:", left_rssi)
-                        print("Right Strength:", right_rssi)
                         await left_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'left'))
                         await right_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'right'))
 
@@ -416,7 +412,7 @@ class Calibrate:
         calibration_name = ttk.Entry(popup, width=10)
         calibration_name.grid(row=5, column=0, pady=10, padx=50, columnspan=3)
         ttk.Button(popup, text="Save Calibration", command=lambda: self.save_calibration(popup, diameter, wheel_dist, left_gain, right_gain, calibration_name.get())).grid(row=6, column=0, pady=10, padx=50, columnspan=3)
-        ttk.Button(popup, text="Don't Save", command=popup.destroy).grid(row=6, column=0, pady=10, padx=50, columnspan=3)
+        ttk.Button(popup, text="Don't Save", command=popup.destroy).grid(row=6, column=1, pady=10, padx=50, columnspan=3)
 
     def save_calibration(self, popup, diameter, wheel_dist, left_gain, right_gain, calibration_name):
         # save dictionary to json
