@@ -1,5 +1,6 @@
 import os
 import subprocess
+import serial.tools.list_ports
 
 def modify_arduino_code(unit_id, unit_side, original_file_path, output_file_path):
     # Read the original Arduino code
@@ -48,13 +49,19 @@ def upload_code_to_arduino(output_file_path, port):
 def main():
     unit_id = input("Enter the unit ID: ")
     unit_side = input("Enter the unit side (l or r): ")
-    original_file_path = 'base_ble\\arduino_code\\arduino_code.ino'
+    original_file_path = 'base_ble\\arduino_code_copy\\arduino_code_copy.ino'
     output_file_path = f'base_ble\\arduino_code_{unit_id}\\arduino_code_{unit_id}.ino'
-    port = 'COM8'  # Replace with the actual port your Arduino is connected to
+    ports = serial.tools.list_ports.comports()
+    # port = ports[-1]
+    for port, desc, _ in sorted(ports):
+        if "USB Serial Device" in desc:
+            break
+    print('Port:', port)
+    # port = 'COM10'  # Replace with the actual port your Arduino is connected to
     
     # Modify the Arduino code with the unit ID
     modify_arduino_code(unit_id, unit_side, original_file_path, output_file_path)
-    
+
     # Upload the modified code to the Arduino
     upload_code_to_arduino(output_file_path, port)
 
