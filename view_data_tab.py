@@ -186,6 +186,13 @@ class ViewData:
         # print(filename)
         # df.to_csv(filename, index=False)
 
+    def delete_test(self, data):
+        self.test_collection.delete_one({'_id': data['_id']})
+        # delete all widgets in notebook
+        for widget in self.tab.winfo_children():
+            widget.destroy()
+        self.initialize_tab(auto=False)
+
     # make available to other classes that want to use the subplot labels
     @staticmethod
     def set_subplot_labels(axs):
@@ -297,6 +304,14 @@ class ViewData:
         set_record_background_button = ttk.Button(self.tab, text='Set Record Background', command=lambda: self.set_record_background(data))
         set_record_background_button.grid(row=88, column=0, columnspan=3, sticky='nsew')
 
+        ttk.Separator(self.tab, orient='horizontal').grid(row=92, column=0, columnspan=3, sticky='new')
+
+
+        delete_test_button = ttk.Button(self.tab, text='Delete Test Run (Ctrl + Click)')
+        delete_test_button.grid(row=96, column=0, columnspan=3, sticky='nsew')
+
+        delete_test_button.bind("<Control-Button-1>", lambda event: self.delete_test(data))
+
 
     def set_record_background(self, data):
         self.record_data_tab.set_background(data)
@@ -315,6 +330,14 @@ class ViewData:
         if data is None:
             test_name = self.valid_ids[self.new_valid_ids.index(self.select_test_run.get())]
             data = self.test_collection.find({'_id': test_name})[0]
+
+            min_len = len(data['traj_x'])
+
+            for key, value in data.items():
+                if len(value) > min_len:
+                    data[key] = value[:min_len]
+                
+
 
         if not hasattr(self, 'fig'):
             screen_width = self.tab.winfo_screenwidth()
