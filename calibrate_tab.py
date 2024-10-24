@@ -548,8 +548,6 @@ class Calibrate:
         # draw_grid_lines(self.tab)
     async def show_images(self):
 
-        print('showing images')
-
         # image = Image.open('new_resources/forward1_1.jpg')
         # width, height = image.size
         # # image = image.resize((self.image_width, self.image_height))

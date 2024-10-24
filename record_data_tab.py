@@ -50,6 +50,8 @@ class RecordData:
         self.keep_running = True
         self.ble_thread = None
 
+        self.recording_started = False
+        self.recording_stopped = True
         self.reset_data()
 
         self.packets = 0
@@ -111,21 +113,6 @@ class RecordData:
                 
             else:
                 return
-            
-            left_data = struct.unpack('f', data[5:9])[0]
-
-            if self.right_buffer != None:
-                data_time, right_data = self.right_buffer
-
-                time_to_save = (data_time + (time.time() - self.start_time) ) / 2
-                self.data['gyro_right'].append(right_data)
-                self.data['gyro_left'].append(left_data)
-                self.data['time_from_start'].append(time_to_save)
-
-                self.left_buffer = None
-                self.right_buffer = None
-            else:
-                self.left_buffer = (time.time() - self.start_time, left_data)
 
         elif data[0] == 1:
 
@@ -137,22 +124,6 @@ class RecordData:
                 return
             else:
                 return
-            
-            right_data = struct.unpack('f', data[5:9])[0]
-
-            if self.left_buffer != None:
-                data_time, left_data = self.left_buffer
-
-                # average time from the buffer and from now to get approximate time
-                time_to_save = (data_time + (time.time() - self.start_time) ) / 2
-                self.data['gyro_right'].append(right_data)
-                self.data['gyro_left'].append(left_data)
-                self.data['time_from_start'].append(time_to_save)
-
-                self.left_buffer = None
-                self.right_buffer = None
-            else:
-                self.right_buffer = (time.time() - self.start_time, right_data)
 
     def parse_data(self, left_message, right_message):
         time_curr = time.time() - self.start_time
@@ -379,6 +350,8 @@ class RecordData:
                     self.right_smarthub_connection['text'] = 'Connected'
                     self.right_smarthub_connection['foreground'] = '#217346'
 
+                    self.connect_button['text'] = 'Connected'
+
                     if self.operator_id is not None:
                         self.start_recording_button['state'] = 'normal'
 
@@ -422,11 +395,11 @@ class RecordData:
                         await right_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'right'))
 
 
-                    initial_loop = True
                     while True:
                         if self.recording_started == False:
                             self.recording_stopped = False
                             await asyncio.sleep(0)
+                            initial_loop = True
                             continue
 
                         if self.recording_stopped == True:
@@ -435,12 +408,13 @@ class RecordData:
                             await right_client.stop_notify(ch)
 
                             update_graphs_thread.join()
-                            break
+                            continue
+                            
 
                         if initial_loop:
                             self.start_time = time.time()
                             initial_loop = False
-
+                            self.reset_data()
                             print('started loop')
 
                             update_graphs_thread = threading.Thread(target=self.update_graphs, daemon=True)
@@ -556,6 +530,8 @@ class RecordData:
             await asyncio.sleep(10)  # Wait before retrying
 
     def connect_smarthubs(self, smarthub_id):
+        self.connect_button['text'] = 'Connecting...'
+
         def ble_task():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -593,9 +569,6 @@ class RecordData:
             'trajectory': []
         }
 
-        self.recording_started = False
-        self.recording_stopped = True
-
         self.last_time_left = 0
         self.last_time_right = 0
         self.start_time_left = 0
@@ -604,8 +577,12 @@ class RecordData:
 
     def save_data(self):
 
+        if len(self.data['time_from_start']) < 1:
+            print('no data recorded')
+            return
+
         test_datetime = datetime.now()
-        datetime_str = f"{test_datetime.month}/{test_datetime.day}/{test_datetime.year}_{test_datetime.hour}:{test_datetime.minute}"
+        datetime_str = f"{test_datetime.month}/{test_datetime.day}/{test_datetime.year}_{test_datetime.hour}:{test_datetime.minute}:{test_datetime.second}"
 
         time.sleep(0.1)
         self.update_graphs()
@@ -643,6 +620,10 @@ class RecordData:
 
         df.to_csv('test_data.csv', index=False)
 
+        self.recording_started = False
+        self.recording_stopped = True
+        self.reset_data()
+
 
     def create_widgets(self):
         style = ttk.Style()
@@ -659,7 +640,8 @@ class RecordData:
             .grid(row=3, column=0, pady=10, columnspan=3)
         smarthub_id = ttk.Entry(self.tab, width=10, font=font.Font(size=12))
         smarthub_id.grid(row=4, column=0, pady=10, columnspan=2, sticky='nsew')
-        ttk.Button(self.tab, text='Connect', command=lambda: self.connect_smarthubs(smarthub_id.get())).grid(row=4, column=2, pady=10, sticky='nsew')
+        self.connect_button = ttk.Button(self.tab, text='Connect', command=lambda: self.connect_smarthubs(smarthub_id.get()))
+        self.connect_button.grid(row=4, column=2, pady=10, sticky='nsew')
         smarthub_id.bind('<Return>', lambda event: self.connect_smarthubs(smarthub_id.get()))
 
         ttk.Label(self.tab, text="Left Smarthub: ", justify='center', font=font.Font(size=14))\
