@@ -191,6 +191,17 @@ class ViewData:
         # delete all widgets in notebook
         for widget in self.tab.winfo_children():
             widget.destroy()
+
+        # remove all attributes from class except for the ones initialized in setup
+        for attr in dir(self):
+            if not attr.startswith('__') and attr not in ['tab', 'record_data_tab', 'test_collection'] and not callable(getattr(self, attr)):
+                delattr(self, attr)
+
+        self.last_scale_update = time.time()
+        self.overlay = tk.BooleanVar(value=False)
+
+        self.prev_data = []
+
         self.initialize_tab(auto=False)
 
     # make available to other classes that want to use the subplot labels
