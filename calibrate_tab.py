@@ -17,6 +17,7 @@ import numpy as np
 import time
 import json
 from bleak import BleakScanner, BleakClient, BleakError
+from PIL import Image, ImageTk
 
 from base_ble.params import DATE_DIR, DATE_NOW, left_gain, left_offset, right_gain, right_offset
 
@@ -46,8 +47,6 @@ class Calibrate:
         self.tab = tab
         self.test_config = database.test_config
 
-        self.create_widgets()
-
         self.data = {
             'gyro_right': [],
             'gyro_left': [],
@@ -67,86 +66,145 @@ class Calibrate:
         self.calibration_sequence = []
         self.current_calibration_step = 0
 
+        self.create_widgets()
         self.set_calibration_sequence()
 
+    def get_image_instances(self, image_names):
+        images = []
+        for image_name in image_names:
+            image = Image.open(f'new_resources/{image_name}')
+            width, height = image.size
+            image = self.resize_image(image, self.image_width, self.image_height)
+            images.append(image)
+        return images
+
     def set_calibration_sequence(self):
+
+        image_names = ['start.jpg']
+        images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'start', 
                                           'text': 'Move the wheelchair to the starting position.  Set the left wheel on the end tape.',
                                           'time_from_start': [],
                                           'gyro_left': [],
-                                          'gyro_right': []})
+                                          'gyro_right': [],
+                                          'images': images})
         
+        image_names = ['start.jpg']
+        images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'pause1', 
                                           'text': 'Wait for at least 5 seconds with the left wheel on the tape.  Do not move the wheelchair.',
                                           'time_from_start': [],
                                           'gyro_left': [],
-                                          'gyro_right': []})
+                                          'gyro_right': [],
+                                          'images': images})
         
+        image_names = ['start.jpg', 'forward1_1.jpg', 'forward1_2.jpg', 'forward1_3.jpg', 'forward1_4.jpg']
+        images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'forward1', 
                                           'text': 'Move the wheelchair forward 10 meters. Keep the the left wheel on the tape.',
                                           'time_from_start': [],
                                           'gyro_left': [],
-                                          'gyro_right': []})
+                                          'gyro_right': [],
+                                          'images': images})
         
+        image_names = ['forward1_4.jpg', 'turnleft1_1.jpg', 'turnleft1_2.jpg', 'turnleft1_3.jpg']
+        images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'turnleft1',
                                           'text': 'Turn the wheelchair 180 degrees, keeping the left wheel on the tape.',
                                           'time_from_start': [],
                                           'gyro_left': [],
-                                          'gyro_right': []})
+                                          'gyro_right': [],
+                                          'images': images})
         
+        image_names = ['turnleft1_3.jpg', 'forward2_1.jpg', 'forward2_2.jpg', 'forward2_3.jpg', 'forward2_4.jpg']
+        images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'forward2',
                                           'text': 'Move the wheelchair forward 10 meters. Keep the the left wheel on the tape.',
                                           'time_from_start': [],
                                           'gyro_left': [],
-                                          'gyro_right': []})
+                                          'gyro_right': [],
+                                          'images': images})
         
+        image_names = ['forward2_4.jpg', 'turnleft2_1.jpg', 'turnleft2_2.jpg', 'turnleft2_3.jpg']
+        images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'turnleft2',
                                           'text': 'Turn the wheelchair 180 degrees, keeping the left wheel on the tape.',
                                           'time_from_start': [],
                                           'gyro_left': [],
-                                          'gyro_right': []})
+                                          'gyro_right': [],
+                                          'images': images})
         
+        image_names = ['turnleft2_3.jpg', 'start2.jpg']
+        images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'setposition',
                                           'text': 'The wheelchair should currently be in the starting position.  Set the right wheel on the tape.',
                                           'time_from_start': [],
                                           'gyro_left': [],
-                                          'gyro_right': []})
+                                          'gyro_right': [],
+                                          'images': images})
         
+        image_names = ['start2.jpg']
+        images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'pause2',
                                           'text': 'Wait for at least 5 seconds with the right wheel on the tape.  Do not move the wheelchair.',
                                           'time_from_start': [],
                                           'gyro_left': [],
-                                          'gyro_right': []})
+                                          'gyro_right': [],
+                                          'images': images})
         
+        image_names = ['start2.jpg', 'forward3_1.jpg', 'forward3_2.jpg', 'forward3_3.jpg', 'forward3_4.jpg']
+        images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'forward3',
                                           'text': 'Move the wheelchair forward 10 meters. Keep the the right wheel on the tape.',
                                           'time_from_start': [],
                                           'gyro_left': [],
-                                          'gyro_right': []})
+                                          'gyro_right': [],
+                                          'images': images})
         
+        image_names = ['forward3_4.jpg', 'turnright1_1.jpg', 'turnright1_2.jpg', 'turnright1_3.jpg']
+        images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'turnright1',
                                           'text': 'Turn the wheelchair 180 degrees, keeping the right wheel on the tape.',
                                           'time_from_start': [],
                                           'gyro_left': [],
-                                          'gyro_right': []})
+                                          'gyro_right': [],
+                                          'images': images})
         
+        image_names = ['turnright1_3.jpg', 'forward4_1.jpg', 'forward4_2.jpg', 'forward4_3.jpg', 'forward4_4.jpg']
+        images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'forward4',
                                           'text': 'Move the wheelchair forward 10 meters. Keep the the right wheel on the tape.',
                                           'time_from_start': [],
                                           'gyro_left': [],
-                                          'gyro_right': []})
+                                          'gyro_right': [],
+                                          'images': images})
         
+        image_names = ['forward4_4.jpg', 'turnright2_1.jpg', 'turnright2_2.jpg', 'turnright2_3.jpg']
+        images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'turnright2',
                                           'text': 'Turn the wheelchair 180 degrees, keeping the right wheel on the tape.',
                                           'time_from_start': [],
                                           'gyro_left': [],
-                                          'gyro_right': []})
+                                          'gyro_right': [],
+                                          'images': images})
         
+        image_names = ['turnright2_3.jpg']
+        images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'end',
                                           'text': 'The wheelchair should be in the starting position.  Press "END" to save calibration.',
                                           'time_from_start': [],
                                           'gyro_left': [],
-                                          'gyro_right': []})
+                                          'gyro_right': [],
+                                          'images': images})
+        
+        def image_task():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(self.show_images())
+            loop.close()
+
+        image_thread = threading.Thread(target=image_task, daemon=True)
+        image_thread.start()
         
     def next_calibration_step(self):
         self.current_calibration_step += 1
@@ -155,6 +213,7 @@ class Calibrate:
 
     def update_calibration_display(self):
         self.calibration_title['text'] = self.calibration_sequence[self.current_calibration_step]['text']
+
 
 
     async def connect_to_device(self, left_address, right_address):
@@ -215,7 +274,7 @@ class Calibrate:
                             await right_client.stop_notify(ch)
 
                             # update_graphs_thread.join()
-                            break
+                            return
                         else:
                             await left_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'left'))
                             await right_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'right'))
@@ -368,6 +427,8 @@ class Calibrate:
             print('calibration started')
             self.recording_started = True
 
+            # self.show_images()
+
 
             self.start_recording_button['text'] = 'Next Step'
 
@@ -385,6 +446,14 @@ class Calibrate:
             self.recording_stopped = True
             # self.start_recording_button['state'] = 'disabled'
             self.perform_calibration()
+
+            self.recording_started = False
+
+            self.calibration_sequence = []
+            self.current_calibration_step = 0
+
+            self.start_recording_button['text'] == 'Start Calibration'
+            self.set_calibration_sequence()
 
     def perform_calibration(self):
         res = fsolve(minimize_function, [20,20,1,1], args=self.calibration_sequence)
@@ -436,8 +505,8 @@ class Calibrate:
 
         print('successfully saved calibration')
 
-        
-       
+    
+
 
     def create_widgets(self):
         style = ttk.Style()
@@ -477,24 +546,97 @@ class Calibrate:
         self.calibration_title.grid(row=0, column=4, pady=10, columnspan=100, rowspan=2)
 
         # draw_grid_lines(self.tab)
+    async def show_images(self):
+
+        print('showing images')
+
+        # image = Image.open('new_resources/forward1_1.jpg')
+        # width, height = image.size
+        # # image = image.resize((self.image_width, self.image_height))
+        # image = self.resize_image(image, self.image_width, self.image_height)
+        # if self.recording_stopped:
+        #     return
+        
+        images = self.calibration_sequence[self.current_calibration_step]['images']
+        if not hasattr(self, 'current_image_index'):
+            self.current_image_index = 0
+        if not hasattr(self, 'last_calibration_step'):
+            self.last_calibration_step = self.current_calibration_step
+
+        if self.last_calibration_step != self.current_calibration_step:
+            self.current_image_index = 0
+        self.last_calibration_step = self.current_calibration_step
+
+        if self.current_image_index >= len(images):
+            self.current_image_index = 0
+
+            images = self.calibration_sequence[self.current_calibration_step]['images']
+
+        image = images[self.current_image_index]
+        tk_image = ImageTk.PhotoImage(image)
+        image_width, image_height = image.size
+        x_offset = (self.image_width - image_width) // 2
+        self.canvas.create_image(x_offset, 0, anchor=tk.NW, image=tk_image)
+
+        self.canvas.image = tk_image
+        self.current_image_index += 1
+
+        await asyncio.sleep(0.4)
+        await self.show_images()
+
+        # self.tab.after(400, self.show_images)
+
+
+    def resize_image(self, image, max_width, max_height):
+        # Get the original image size
+        original_width, original_height = image.size
+
+        # Calculate the aspect ratio
+        aspect_ratio = original_width / original_height
+
+        # Calculate the new dimensions based on the bounding box
+        if aspect_ratio > 1:
+            # Landscape orientation
+            new_width = min(max_width, original_width)
+            new_height = int(new_width / aspect_ratio)
+        else:
+            # Portrait orientation or square
+            new_height = min(max_height, original_height)
+            new_width = int(new_height * aspect_ratio)
+
+        # Ensure the new dimensions fit within the bounding box
+        if new_width > max_width:
+            new_width = max_width
+            new_height = int(new_width / aspect_ratio)
+        if new_height > max_height:
+            new_height = max_height
+            new_width = int(new_height * aspect_ratio)
+
+        # Resize the image while maintaining the aspect ratio
+        return image.resize((new_width, new_height))
 
     def create_graphs(self):
         dpi = 100
-        if not hasattr(self, 'fig'):
-            screen_width = self.tab.winfo_screenwidth()
-            screen_height = self.tab.winfo_screenheight()
+        # if not hasattr(self, 'fig'):
+        #     screen_width = self.tab.winfo_screenwidth()
+        #     screen_height = self.tab.winfo_screenheight()
 
-            self.fig = Figure(figsize=((screen_width-400)/dpi, (screen_height-200)/dpi), dpi=dpi)
+        #     self.fig = Figure(figsize=((screen_width-400)/dpi, (screen_height-200)/dpi), dpi=dpi)
 
-            # self.fig.tick_params(colors='white')
-            # ax.set_facecolor(str(ttk.Style().lookup('TFrame', 'foreground')))
-            self.fig.set_facecolor('whitesmoke')
+        #     # self.fig.tick_params(colors='white')
+        #     # ax.set_facecolor(str(ttk.Style().lookup('TFrame', 'foreground')))
+        #     self.fig.set_facecolor('whitesmoke')
 
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.tab)
+        self.image_width = self.tab.winfo_screenwidth() - 400
+        self.image_height = self.tab.winfo_screenheight() - 200
+        
+        print('canvas size: ', self.image_width, self.image_height)
+
+        self.canvas = tk.Canvas(master=self.tab, width = self.image_width, height = self.image_height)
 
         self.tab.columnconfigure(3, minsize=100)
 
-        self.canvas.get_tk_widget().grid(row=2, column=4, columnspan=100, rowspan=100, padx=0, pady=0, sticky='nsew')
+        self.canvas.grid(row=2, column=4, columnspan=100, rowspan=100, padx=0, pady=0, sticky='nsew')
 
         
 
