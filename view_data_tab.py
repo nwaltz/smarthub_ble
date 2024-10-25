@@ -403,9 +403,9 @@ class ViewData:
         self.canvas_widgets.append(show_trajectory_gridlines)
 
         if 'heading_deg' not in data:
-            data['heading_deg'] = get_heading_deg(data['elapsed_time_s'], data['gyro_left'], data['gyro_right'])
+            data['heading_deg'] = get_heading_deg(data['elapsed_time_s'], data['gyro_left_smoothed'], data['gyro_right_smoothed'])
         if 'velocity' not in data:
-            data['velocity'] = get_velocity_m_s(data['elapsed_time_s'], data['gyro_left'], data['gyro_right'])
+            data['velocity'] = get_velocity_m_s(data['elapsed_time_s'], data['gyro_left_smoothed'], data['gyro_right_smoothed'])
 
         overlay = self.overlay.get()
         if not overlay:
