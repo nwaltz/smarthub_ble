@@ -80,7 +80,7 @@ class Calibrate:
 
     def set_calibration_sequence(self):
 
-        image_names = ['start.jpg']
+        image_names = []
         images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'start', 
                                           'text': 'Move the wheelchair to the starting position.  Set the left wheel on the end tape.',
@@ -197,14 +197,16 @@ class Calibrate:
                                           'gyro_right': [],
                                           'images': images})
         
-        def image_task():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(self.show_images())
-            loop.close()
+        # def image_task():
+        #     loop = asyncio.new_event_loop()
+        #     asyncio.set_event_loop(loop)
+        #     loop.run_until_complete(self.show_images())
+        #     loop.close()
 
-        image_thread = threading.Thread(target=image_task, daemon=True)
-        image_thread.start()
+        # image_thread = threading.Thread(target=image_task, daemon=True)
+        # image_thread.start()
+
+        self.show_images()
         
     def next_calibration_step(self):
         self.current_calibration_step += 1
@@ -268,6 +270,10 @@ class Calibrate:
                             await asyncio.sleep(0)
                             continue
 
+                        if initial_loop:
+                            self.start_time = time.time()
+                            initial_loop = False
+
                         if self.recording_stopped == True:
                             self.recording_started = False
                             await left_client.stop_notify(ch)
@@ -278,10 +284,6 @@ class Calibrate:
                         else:
                             await left_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'left'))
                             await right_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'right'))
-
-                        if initial_loop:
-                            self.start_time = time.time()
-                            initial_loop = False
 
                             # update_graphs_thread = threading.Thread(target=self.update_graphs, daemon=True)
                             # update_graphs_thread.start()
@@ -487,6 +489,10 @@ class Calibrate:
         # save dictionary to json
         popup.destroy()
 
+        for step in self.calibration_sequence:
+            step.pop('images', None)
+        
+
         with open("data.json", "w") as json_file:
             json.dump(self.calibration_sequence, json_file, indent=4)
 
@@ -546,7 +552,7 @@ class Calibrate:
         self.calibration_title.grid(row=0, column=4, pady=10, columnspan=100, rowspan=2)
 
         # draw_grid_lines(self.tab)
-    async def show_images(self):
+    def show_images(self):
 
         # image = Image.open('new_resources/forward1_1.jpg')
         # width, height = image.size
@@ -567,22 +573,31 @@ class Calibrate:
 
         if self.current_image_index >= len(images):
             self.current_image_index = 0
+            # await self.show_images()
+            self.tab.after(400, self.show_images)
+            return
 
-            images = self.calibration_sequence[self.current_calibration_step]['images']
-
+            # images = self.calibration_sequence[self.current_calibration_step]['images']
+        # print(self.current_image_index)
         image = images[self.current_image_index]
         tk_image = ImageTk.PhotoImage(image)
         image_width, image_height = image.size
         x_offset = (self.image_width - image_width) // 2
-        self.canvas.create_image(x_offset, 0, anchor=tk.NW, image=tk_image)
+
+        self.image_id = self.canvas.create_image(x_offset, 0, anchor=tk.NW, image=tk_image)
+
+        # if hasattr(self, 'last_image_id') and self.last_image_id is not None:
+        #     self.canvas.delete(self.last_image_id)
+
+        # self.last_image_id = self.image_id
 
         self.canvas.image = tk_image
         self.current_image_index += 1
 
-        await asyncio.sleep(0.4)
-        await self.show_images()
+        # await asyncio.sleep(0.4)
+        # await self.show_images()
 
-        # self.tab.after(400, self.show_images)
+        self.tab.after(400, self.show_images)
 
 
     def resize_image(self, image, max_width, max_height):
