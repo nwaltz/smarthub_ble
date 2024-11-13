@@ -8,6 +8,8 @@ import glob
 # import cred
 import asyncio
 
+from pathlib import Path
+
 from view_data_tab import ViewData
 from record_data_tab import RecordData
 from calibrate_tab import Calibrate
@@ -15,14 +17,22 @@ from calibrate_tab import Calibrate
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 
+os.environ['PYINST_WIN32_KEEP_TEMP'] = '1'
+
 if getattr(sys, 'frozen', False):
     # Running in a bundle
     base_path = sys._MEIPASS
+    data_path = os.path.join(base_path, 'data')
+    file_path = os.path.dirname(sys.executable)
     theme_file_path = os.path.join(base_path, 'data', 'forest-dark.tcl')
 else:
     # Running as a script
     base_path = os.path.dirname(os.path.abspath(__file__))
+    file_path = base_path 
+    data_path = file_path
     theme_file_path = os.path.join(base_path, 'forest-dark.tcl')
+
+print('Base path:', base_path)
 
 def end_fullscreen(root=None):
         root.attributes("-fullscreen", False)
@@ -36,7 +46,7 @@ def connect_to_db_password(username, password):
 
 def connect_to_db_certificate(path_to_cert):
     # uri = "mongodb+srv://<username>:<password>@smarthub.gbdlpxs.mongodb.net/?retryWrites=true&w=majority"
-    uri = "mongodb+srv://smarthub.gbdlpxs.mongodb.net?authSource=$external&authMechanism=MONGODB-X509"
+    uri = "mongodb+srv://smarthub.gbdlpxs.mongodb.net/?authSource=$external&authMechanism=MONGODB-X509"
     client = MongoClient(uri, tls=True, tlsCertificateKeyFile=path_to_cert)
     smarthub_db = client.Smarthub
     return smarthub_db
@@ -79,9 +89,9 @@ def initalize_gui(db):
 
     # db = connect_to_db()
 
-    record_data_class = RecordData(record_data_tab, database=db)
-    ViewData(view_data_tab, record_data_class, database=db)
-    Calibrate(calibrate_tab, database=db)
+    record_data_class = RecordData(record_data_tab, database=db, filepath=data_path)
+    ViewData(view_data_tab, record_data_class, database=db, filepath=data_path)
+    Calibrate(calibrate_tab, database=db, filepath=data_path)
 
     root.mainloop()
 
@@ -119,12 +129,35 @@ def authenticate():
 
     root.mainloop()
 
+def extract_files_once():
+    # Persistent extraction directory (AppData in this example)
+    extraction_dir = os.path.join(os.getenv('LOCALAPPDATA'), 'MyAppTemp')
+    version_marker = Path(extraction_dir, "version.txt")
+    current_version = "v1.0"
+
+    # Check if extraction is needed
+    if version_marker.exists() and version_marker.read_text() == current_version:
+        print("Reusing previously extracted files.")
+    else:
+        # Remove old extraction and create fresh directory
+        if os.path.exists(extraction_dir):
+            shutil.rmtree(extraction_dir)
+        os.makedirs(extraction_dir, exist_ok=True)
+
+        # Write a version marker
+        version_marker.write_text(current_version)
+        print("Extracting files for the first time...")
+
+    # Path management if needed for the rest of the app
+    sys.path.append(extraction_dir)
+
 
 if __name__ == '__main__':
-
-    pem_files = glob.glob('*.pem')
+    # extract_files_once()
+    print(file_path)
+    pem_files = glob.glob(file_path + '/*.pem')
+    valid_file = False
     if pem_files:
-        valid_file = False
         for file in pem_files:
             try:
                 print('Authenticating with', file)

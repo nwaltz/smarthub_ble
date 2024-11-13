@@ -43,9 +43,10 @@ def draw_grid_lines(tab):
 
 class Calibrate:
 
-    def __init__(self, tab, database):
+    def __init__(self, tab, database, filepath):
         self.tab = tab
         self.test_config = database.test_config
+        self.filepath = filepath
 
         self.data = {
             'gyro_right': [],
@@ -72,7 +73,7 @@ class Calibrate:
     def get_image_instances(self, image_names):
         images = []
         for image_name in image_names:
-            image = Image.open(f'new_resources/{image_name}')
+            image = Image.open(f'{self.filepath}/new_resources/{image_name}')
             width, height = image.size
             image = self.resize_image(image, self.image_width, self.image_height)
             images.append(image)

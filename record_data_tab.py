@@ -30,10 +30,11 @@ from scipy.fftpack import fftfreq, irfft, rfft
 
 class RecordData:
 
-    def __init__(self, tab, database):
+    def __init__(self, tab, database, filepath):
         self.tab = tab
         self.test_collection = database.test_collection
         self.test_config = database.test_config
+        self.filepath = filepath
         self.create_widgets()
 
         self.background_set = False
@@ -618,16 +619,16 @@ class RecordData:
         id = self.test_collection.insert_one(post).inserted_id
         
 
-        max_len = max(len(v) for v in self.data.values())
+        # max_len = max(len(v) for v in self.data.values())
 
-        # Normalize the lengths of lists by filling with NaN
-        for key in self.data:
-            self.data[key] += [np.nan] * (max_len - len(self.data[key]))
-        df = pd.DataFrame(self.data)
+        # # Normalize the lengths of lists by filling with NaN
+        # for key in self.data:
+        #     self.data[key] += [np.nan] * (max_len - len(self.data[key]))
+        # df = pd.DataFrame(self.data)
 
-        df.fillna('')
+        # df.fillna('')
 
-        df.to_csv('test_data.csv', index=False)
+        # df.to_csv('test_data.csv', index=False)
 
         self.recording_started = False
         self.recording_stopped = True
