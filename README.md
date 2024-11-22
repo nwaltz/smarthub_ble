@@ -1,10 +1,9 @@
 ## file descriptions
-main_gui.py -> initializes gui, run this to see gui capability  
-collect_data.py -> functions to collect all smarthub data, handles multiprocessing  
-retrieve_data.py -> calls mongodb database to view previously collected data
+main_test.py -> main entry point into gui
+view_data_tab.py -> view data from database, edit metadata, download metrics
+record_data_tab.py -> run tests, save data to gui
+calibrate_tab.py -> generate calibration file based on small test run
 
-cred.py -> stores mongodb credentials (DO NOT SHARE)  
-params.py -> wheelchair parameters  
-base_ble folder -> contains all functions to process gyro into usable metrics
+base_ble folder: metrics calculations
 
 dist/smarthub_executable.exe -> single file executable, will not reference any python files.  Can be generated from command line with ```pyinstaller smarthub_executable.spec```
