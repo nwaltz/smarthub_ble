@@ -102,7 +102,7 @@ class Calibrate:
         image_names = ['start.jpg', 'forward1_1.jpg', 'forward1_2.jpg', 'forward1_3.jpg', 'forward1_4.jpg']
         images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'forward1', 
-                                          'text': 'Move the wheelchair forward 10 meters. Keep the the left wheel on the tape.',
+                                          'text': 'Move the wheelchair forward 5 meters. Keep the the left wheel on the tape.',
                                           'time_from_start': [],
                                           'gyro_left': [],
                                           'gyro_right': [],
@@ -120,7 +120,7 @@ class Calibrate:
         image_names = ['turnleft1_3.jpg', 'forward2_1.jpg', 'forward2_2.jpg', 'forward2_3.jpg', 'forward2_4.jpg']
         images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'forward2',
-                                          'text': 'Move the wheelchair forward 10 meters. Keep the the left wheel on the tape.',
+                                          'text': 'Move the wheelchair forward 5 meters. Keep the the left wheel on the tape.',
                                           'time_from_start': [],
                                           'gyro_left': [],
                                           'gyro_right': [],
@@ -156,7 +156,7 @@ class Calibrate:
         image_names = ['start2.jpg', 'forward3_1.jpg', 'forward3_2.jpg', 'forward3_3.jpg', 'forward3_4.jpg']
         images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'forward3',
-                                          'text': 'Move the wheelchair forward 10 meters. Keep the the right wheel on the tape.',
+                                          'text': 'Move the wheelchair forward 5 meters. Keep the the right wheel on the tape.',
                                           'time_from_start': [],
                                           'gyro_left': [],
                                           'gyro_right': [],
@@ -174,7 +174,7 @@ class Calibrate:
         image_names = ['turnright1_3.jpg', 'forward4_1.jpg', 'forward4_2.jpg', 'forward4_3.jpg', 'forward4_4.jpg']
         images = self.get_image_instances(image_names)
         self.calibration_sequence.append({'name': 'forward4',
-                                          'text': 'Move the wheelchair forward 10 meters. Keep the the right wheel on the tape.',
+                                          'text': 'Move the wheelchair forward 5 meters. Keep the the right wheel on the tape.',
                                           'time_from_start': [],
                                           'gyro_left': [],
                                           'gyro_right': [],
