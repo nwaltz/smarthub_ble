@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import font, ttk, Label
-import cred
+# import cred
 import sys
 import time
 import os
@@ -41,10 +41,11 @@ def draw_grid_lines(tab):
 
 class ViewData:
 
-    def __init__(self, tab, record_data_tab, database):
+    def __init__(self, tab, record_data_tab, database, filepath):
         self.tab = tab
         self.record_data_tab = record_data_tab
         self.test_collection = database.test_collection
+        self.filepath = filepath
 
         self.last_scale_update = time.time()
         self.overlay = tk.BooleanVar(value=False)
@@ -556,13 +557,6 @@ class ViewData:
 
         ttk.Button(self.tab, text='Load CSV', command=lambda: self.load_csv()).grid(row=1, column=2, pady=10, padx=10, sticky='nse')
 
-        username = cred.username
-        password = cred.password
-
-        # uri = f"mongodb+srv://{username}:{password}@smarthub.gbdlpxs.mongodb.net/?retryWrites=true&w=majority"
-        # self.client = MongoClient(uri, server_api=ServerApi('1'))
-        # smarthub_db = self.client.Smarthub
-        # self.test_collection = smarthub_db.test_collection
 
         if auto:
             self.find_test_runs('654321', auto=True)

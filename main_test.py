@@ -1,6 +1,6 @@
 from tkinter import *
 from tkinter import ttk
-from retrieve_data import *
+# from retrieve_data import *
 import multiprocessing as mp
 import sys
 import os
