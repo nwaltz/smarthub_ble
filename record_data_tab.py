@@ -30,12 +30,14 @@ from scipy.fftpack import fftfreq, irfft, rfft
 
 class RecordData:
 
-    def __init__(self, tab, database, filepath):
+    def __init__(self, tab, database, filepath, screen_size):
         self.tab = tab
         self.test_collection = database.test_collection
         self.test_config = database.test_config
         self.filepath = filepath
+        self.screen_width, self.screen_height = screen_size
         self.create_widgets()
+
 
         self.background_set = False
         self.line_pos = 0
@@ -58,7 +60,7 @@ class RecordData:
         self.packets = 0
 
 
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
         self.left_buffer = None
         self.right_buffer = None

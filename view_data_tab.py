@@ -41,11 +41,12 @@ def draw_grid_lines(tab):
 
 class ViewData:
 
-    def __init__(self, tab, record_data_tab, database, filepath):
+    def __init__(self, tab, record_data_tab, database, filepath, screen_size):
         self.tab = tab
         self.record_data_tab = record_data_tab
         self.test_collection = database.test_collection
         self.filepath = filepath
+        self.screen_width, self.screen_height = screen_size
 
         self.last_scale_update = time.time()
         self.overlay = tk.BooleanVar(value=False)
@@ -484,7 +485,7 @@ class ViewData:
 
         slider = Slider(
             self.tab,
-            width=1400,
+            width=self.screen_width-350,
             height=40,
             min_val=min_time,
             max_val= max_time,

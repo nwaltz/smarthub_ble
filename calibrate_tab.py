@@ -43,10 +43,11 @@ def draw_grid_lines(tab):
 
 class Calibrate:
 
-    def __init__(self, tab, database, filepath):
+    def __init__(self, tab, database, filepath, screen_size):
         self.tab = tab
         self.test_config = database.test_config
         self.filepath = filepath
+        self.screen_width, self.screen_height = screen_size
 
         self.data = {
             'gyro_right': [],
