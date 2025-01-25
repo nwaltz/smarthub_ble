@@ -17,7 +17,7 @@ from calibrate_tab import Calibrate
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 
-os.environ['PYINST_WIN32_KEEP_TEMP'] = '1'
+# os.environ['PYINST_WIN32_KEEP_TEMP'] = '1'
 
 if getattr(sys, 'frozen', False):
     # Running in a bundle
@@ -89,9 +89,9 @@ def initalize_gui(db):
 
     # db = connect_to_db()
 
-    record_data_class = RecordData(record_data_tab, database=db, filepath=data_path)
-    ViewData(view_data_tab, record_data_class, database=db, filepath=data_path)
-    Calibrate(calibrate_tab, database=db, filepath=data_path)
+    record_data_class = RecordData(record_data_tab, database=db, filepath=data_path, screen_size=(screen_width, screen_height))
+    ViewData(view_data_tab, record_data_class, database=db, filepath=data_path, screen_size=(screen_width, screen_height))
+    Calibrate(calibrate_tab, database=db, filepath=data_path, screen_size=(screen_width, screen_height))
 
     root.mainloop()
 
