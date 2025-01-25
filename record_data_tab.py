@@ -180,8 +180,8 @@ class RecordData:
             # Filtering with low pass filter
             filter_freq =  6
             # Calculate fourier transform of right gyroscope data to convert to frequency domain
-            W_right = fftfreq(len(self.data['gyro_right']), d=self.data['time_from_start'][1]-self.data['time_from_start'][0])
-            f_gyro_right = rfft(self.data['gyro_right'])
+            W_right = fftfreq(len(data['gyro_right']), d=data['time_from_start'][1]-data['time_from_start'][0])
+            f_gyro_right = rfft(data['gyro_right'])
             # Filter out right gyroscope signal above 6 Hz
             f_right_filtered = f_gyro_right.copy()
             f_right_filtered[(np.abs(W_right)>filter_freq)] = 0
@@ -191,8 +191,8 @@ class RecordData:
             self.data['gyro_right_smoothed'] = gyro_right_smoothed
 
             # Calculate fourier transform of right gyroscope data to convert to frequency domain
-            W_left = fftfreq(len(self.data['gyro_left']), d=self.data['time_from_start'][1]-self.data['time_from_start'][0])
-            f_gyro_left = rfft(self.data['gyro_left'])
+            W_left = fftfreq(len(data['gyro_left']), d=data['time_from_start'][1]-data['time_from_start'][0])
+            f_gyro_left = rfft(data['gyro_left'])
             # Filter out right gyroscope signal above 6 Hz
             f_left_filtered = f_gyro_left.copy()
             f_left_filtered[(np.abs(W_left)>filter_freq)] = 0
@@ -404,6 +404,7 @@ class RecordData:
                         await left_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'left'))
                         await right_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'right'))
 
+                    initial_loop = True
 
                     while True:
                         if self.recording_started == False:
@@ -472,6 +473,7 @@ class RecordData:
             ttk.Label(popup, text="Device went out of range, please retry connection", font=font.Font(size=14)).grid(row=0, column=0, pady=10, padx=50, columnspan=3)
             return
         except OSError as e:
+            print(e)
             popup = tk.Toplevel()
             ttk.Label(popup, text="Device went out of range, please retry connection", font=font.Font(size=14)).grid(row=0, column=0, pady=10, padx=50, columnspan=3)
             return
@@ -508,7 +510,7 @@ class RecordData:
         self.right_smarthub_connection['foreground'] = '#a92222'
 
         devices = await BleakScanner.discover(timeout=8.0)
-        smarthub_id = "9999"
+        # smarthub_id = "9999"
         left_address = None
         right_address = None
         for d in devices:
@@ -576,7 +578,8 @@ class RecordData:
             'disp_m': [],
             'heading_deg': [],
             'velocity': [],
-            'trajectory': []
+            'trajectory': [],
+            'notes': ''
         }
 
         self.last_time_left = 0
@@ -615,6 +618,8 @@ class RecordData:
         post['traj_x'] = [i[0] for i in self.data['trajectory']][:min_len]
         post['traj_y'] = [i[1] for i in self.data['trajectory']][:min_len]
         post['user_id'] = self.operator_id
+
+        post['notes'] = self.data['notes']
 
         id = self.test_collection.insert_one(post).inserted_id
         
