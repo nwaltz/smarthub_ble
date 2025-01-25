@@ -53,9 +53,14 @@ def main():
     output_file_path = f'base_ble\\arduino_code_{unit_id}\\arduino_code_{unit_id}.ino'
     ports = serial.tools.list_ports.comports()
     # port = ports[-1]
+    found_port = False
     for port, desc, _ in sorted(ports):
         if "USB Serial Device" in desc:
+            found_port = True
             break
+    if not found_port:
+        print("No Arduino found")
+        exit()
     print('Port:', port)
     # port = 'COM10'  # Replace with the actual port your Arduino is connected to
     
