@@ -38,7 +38,7 @@ def modify_arduino_code(unit_id, unit_side, original_file_path, output_file_path
 def upload_code_to_arduino(output_file_path, port):
     # Command to compile and upload the code
     command = [
-        "./arduino-cli lib install 'Arduino_LSM9DS1' && ./arduino-cli lib install 'ArduinoBLE' &&",
+        "./arduino-cli lib install 'Arduino_LSM9DS1' && ./arduino-cli lib install 'ArduinoBLE' && ./arduino-cli lib install 'Arduino_BMI270_BMM150' &&",
         "./arduino-cli", "compile", "--fqbn", "arduino:mbed_nano:nano33ble", output_file_path,
         "&&",
         "./arduino-cli", "upload", "-p", port, "--fqbn", "arduino:mbed_nano:nano33ble", output_file_path
@@ -55,6 +55,7 @@ def main():
     ports = serial.tools.list_ports.comports()
     # port = ports[-1]
     found_port = False
+    
     for port, desc, _ in sorted(ports):
         if "USB Serial Device" in desc or "usbmodem" in port:
             found_port = True
