@@ -7,7 +7,8 @@ from matplotlib.ticker import MultipleLocator
 import asyncio
 import tkinter as tk
 import copy
-from tkinter import font, ttk, Label
+from tkinter import font, Label
+from tkinter import ttk
 import threading
 import pandas as pd
 import struct
@@ -39,36 +40,49 @@ class RecordData:
         self.create_widgets()
 
 
+        # have we set a background for the graph yet?
         self.background_set = False
+
+        # track how many backgrounds we've set
         self.line_pos = 0
 
+        # diameter of the wheels (default if no calibration set)
         self.diameter = WHEEL_DIAM_IN
+        # distance between the wheels (default if no calibration set)
         self.dist_wheels = DIST_WHEELS_IN
 
+        # gain for the wheels (default if no calibration set)
         self.left_gain = left_gain
         self.right_gain = right_gain
 
+        # 6 digit operator id (not set by default) (not regulated, it can be whatever string you want)
         self.operator_id = None
 
-        self.keep_running = True
-        self.ble_thread = None
+        # self.ble_thread = None
 
+        # have we started recording? this will be set to true once we have
         self.recording_started = False
+        # have we stopped recording? this will be set to false once we start recording
         self.recording_stopped = True
+        # reason for two of these is so we can cycle through one if statement while we haven't started recording, then 
+        # go through the other if statement once when we've stopped.  logic is handled in connect_to_device
+
+
+        # initialize empty dictionary to store data
         self.reset_data()
 
-        self.packets = 0
-
-
-        # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-        self.left_buffer = None
-        self.right_buffer = None
 
     def handle_disconnect(self, _):
         print(f"Disconnected from device")
 
     def set_operator_id(self, operator_id):
+        """
+        param -> operator_id: 6 digit operator id (or whatever string you want)
+        returns -> None
+
+        sets the operator id for the test in the title on top of all the graphs
+        also checks to see if we've connected to smarthubs yet, if we have then enable the start recording button
+        """
         self.operator_id = operator_id
         operator_id_label = Label(self.tab, text=f'Operator ID: {self.operator_id}', font=font.Font(size=18))
         operator_id_label.grid(row=0, column=3, columnspan=100, sticky='sew')
@@ -79,6 +93,49 @@ class RecordData:
 
     @staticmethod
     def convert_from_raw(raw_data):
+        """
+        param -> raw_data: raw data as 18 len bytearray
+        returns ->  accel_data: list of 4 acceleration data floats
+                    gyro_data: list of 4 gyro data floats
+
+        converts raw data from smarthub to true acceleration and gyro data
+        set as @staticmethod so we can call it from other classes
+
+        format of raw data:
+        ┏---┓
+        ┃ 0 ┃ sign bits for accel data  0b00001111 if all 4 negative
+        ┗---┛
+        ┏---┓
+        ┃ 1 ┃ sign bits for gyro data  0b00001111 if all 4 negative
+        ┗---┛
+        ┏---┓┏---┓
+        ┃ 2 ┃┃ 3 ┃ accel data 1 (LSB first) | unsigned value, divide by 1000 to get true accel data
+        ┗---┗┗---┛
+        ┏---┓┏---┓
+        ┃ 4 ┃┃ 5 ┃ accel data 2
+        ┗---┗┗---┛
+        ┏---┓┏---┓
+        ┃ 6 ┃┃ 7 ┃ accel data 3
+        ┗---┗┗---┛
+        ┏---┓┏---┓
+        ┃ 8 ┃┃ 9 ┃ accel data 4
+        ┗---┗┗---┛
+        ┏----┓┏----┓
+        ┃ 10 ┃┃ 11 ┃ gyro data 1 (LSB first) | unsigned value, divide by 100 to get true gyro data
+        ┗----┗┗----┛
+        ┏----┓┏----┓
+        ┃ 12 ┃┃ 13 ┃ gyro data 2
+        ┗----┗┗----┛
+        ┏----┓┏----┓
+        ┃ 14 ┃┃ 15 ┃ gyro data 3
+        ┗----┗┗----┛
+        ┏----┓┏----┓
+        ┃ 16 ┃┃ 17 ┃ gyro data 4
+        ┗----┗┗----┛
+
+        1 refers to oldest data, 4 refers to newest data
+
+        """
 
         accel_data = []
         gyro_data = []
@@ -90,7 +147,7 @@ class RecordData:
 
             gyro_data.append((raw_data[2*i+10] + raw_data[2*i+11]*256) / 100) # bytes 10, 12, 14, 16 convert to true gyro data
 
-            # pull signs from sign byte to modify data
+            # pull signs from sign bytes to modify data
             if (raw_data[0] & (1 << i)) == (1 << i):
                 accel_data[i] *= -1
 
@@ -98,44 +155,22 @@ class RecordData:
                 gyro_data[i] *= -1
         return accel_data, gyro_data
 
-    def update_data(self, _, data):
-
-        if self.packets % 50 == 0:
-            print(self.packets)
-    
-
-        if data[0] == 0:
-
-            side = 'left'
-            curr_time = struct.unpack('f', data[1:5])[0]
-
-            if curr_time != self.last_time_right:
-                self.last_time_right = curr_time
-                self.packets += 1
-                return
-                
-            else:
-                return
-
-        elif data[0] == 1:
-
-            side = 'right'
-            curr_time = struct.unpack('f', data[1:5])[0]
-            if curr_time != self.last_time_left:
-                self.packets += 1
-                self.last_time_left = curr_time
-                return
-            else:
-                return
-
     def parse_data(self, left_message, right_message):
+        """
+        param -> left_message: 18 len bytearray of raw data from left smarthub
+                 right_message: 18 len bytearray from right smarthub
+        returns -> None
+
+        parses raw data from smarthubs and appends to data dictionary
+        handles 
+        
+        
+        """
         time_curr = time.time() - self.start_time
         time_vals = []
         if not hasattr(self, 'last_time'):
             self.last_time = time_curr
             return
-        
-        # print(time_curr-self.last_time)
 
         for i in range(3, -1, -1):
 
@@ -246,6 +281,7 @@ class RecordData:
                                                 data['time_from_start'], diameter=self.diameter, dist_wheels=self.dist_wheels)  # use displacement
 
         # update subplots, if there's a background make sure we update the right graphs
+        print(self.line_pos)
         if not self.axs[0].lines or (self.background_set and len(self.axs[0].lines) == 1):
             self.axs[0].plot(data['time_from_start'], self.data['dist_m'])
         elif self.background_set:
@@ -295,29 +331,7 @@ class RecordData:
         self.background_set = True
         if not self.recording_started:
             self.line_pos = len(self.axs[0].lines) + 1
-        if 'gyro_right_smoothed' in data.keys():
-            gyro_right = data['gyro_right_smoothed']
-        else:
-            gyro_right = data['gyro_right']
-        if 'gyro_left_smoothed' in data.keys():
-            gyro_left = data['gyro_left_smoothed']
-        else:
-            gyro_left = data['gyro_left']
 
-        # self.data['dist_m'][:] = get_distance_m(data['elapsed_time_s'], gyro_left,
-        #                                     gyro_right, diameter=self.diameter, dist_wheels=self.dist_wheels)
-        # # Calculate displacement for the data['trajectory']:
-        # self.data['disp_m'][:] = get_displacement_m(data['elapsed_time_s'], gyro_left,
-        #                                         gyro_right, diameter=self.diameter, dist_wheels=self.dist_wheels)
-        # # Find heading angle over time:
-        # self.data['heading_deg'][:] = get_heading_deg(data['elapsed_time_s'], gyro_left,
-        #                                             gyro_right, diameter=self.diameter, dist_wheels=self.dist_wheels)
-        # # Calculate Velocity over time:
-        # self.data['velocity'][:] = get_velocity_m_s(data['elapsed_time_s'], gyro_left,
-        #                                         gyro_right, diameter=self.diameter, dist_wheels=self.dist_wheels)
-        # # Process data['trajectory']:
-        # self.data['trajectory'][:] = get_top_traj(self.data['disp_m'], self.data['velocity'], self.data['heading_deg'],
-        #                                         data['elapsed_time_s'], diameter=self.diameter, dist_wheels=self.dist_wheels)  # use displacement
         
         self.axs[0].plot(data['elapsed_time_s'], data['distance_m'], label="Distance")
         self.axs[1].plot(data['traj_x'], data['traj_y'], label="Trajectory")
@@ -371,7 +385,7 @@ class RecordData:
 
                     self.select_calibration()
 
-                    # await left_client.start_notify(ch, self.update_data, side='left')
+                    self.notifications_started = False
 
                     self.new_data_left = None
                     self.new_data_right = None
@@ -403,6 +417,7 @@ class RecordData:
                         # right_rssi = await right_client.get_rssi()
                         # print("Left Strength:", left_rssi)
                         # print("Right Strength:", right_rssi)
+                        self.notifications_started = True
                         await left_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'left'))
                         await right_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'right'))
 
@@ -420,7 +435,9 @@ class RecordData:
                             await left_client.stop_notify(ch)
                             await right_client.stop_notify(ch)
 
-                            update_graphs_thread.join()
+                            self.notifications_started = False
+
+                            # update_graphs_thread.join()
                             continue
                             
 
@@ -430,10 +447,13 @@ class RecordData:
                             self.reset_data()
                             print('started loop')
 
-                            update_graphs_thread = threading.Thread(target=self.update_graphs, daemon=True)
-                            update_graphs_thread.start()
+                            self.tab.after(0, self.update_graphs)
 
-                        await start_notifications(self, left_client, right_client, ch)
+                            # update_graphs_thread = threading.Thread(target=self.update_graphs, daemon=True)
+                            # update_graphs_thread.start()
+
+                        if not self.notifications_started:
+                            await start_notifications(self, left_client, right_client, ch)
                         await asyncio.sleep(1)
 
                         
@@ -459,25 +479,15 @@ class RecordData:
                                 await left_client.disconnect()
                                 break
 
-                        try:
-                            pass
-                        
-                            # read_message1 = await left_client.read_gatt_char(ch)
-                            # print('read left')
-                            # read_message2 = await right_client.read_gatt_char(ch)
-                            # print('read right')
-                        except OSError:
-                            print('gatt read error')
-
         except BleakError as e:
             print(f"Failed to connect: {e}")
             popup = tk.Toplevel()
-            ttk.Label(popup, text="Device went out of range, please retry connection", font=font.Font(size=14)).grid(row=0, column=0, pady=10, padx=50, columnspan=3)
+            ttk.Label(popup, text=f"Device went out of range, please retry connection: BleakError {e}", font=font.Font(size=14)).grid(row=0, column=0, pady=10, padx=50, columnspan=3)
             return
         except OSError as e:
             print(e)
             popup = tk.Toplevel()
-            ttk.Label(popup, text="Device went out of range, please retry connection", font=font.Font(size=14)).grid(row=0, column=0, pady=10, padx=50, columnspan=3)
+            ttk.Label(popup, text=f"Device went out of range, please retry connection: OSERrror {e}", font=font.Font(size=14)).grid(row=0, column=0, pady=10, padx=50, columnspan=3)
             return
 
         except TimeoutError as e:
@@ -493,15 +503,15 @@ class RecordData:
         screen_height = tk.Tk().winfo_screenheight()
 
         # popup.geometry("300x150")
-        popup.geometry(f"+{int(screen_width/2-250)}+{int(screen_height/2-250)}")
+        # popup.geometry(f"+{int(screen_width/2-250)}+{int(screen_height/2-250)}")
 
         if left==True:
             ttk.Label(popup, text="Left Smarthub not found", font=font.Font(size=14)).grid(row=0, column=0, pady=10, padx=50, columnspan=3)
         if right==True:
             ttk.Label(popup, text="Right Smarthub not found", font=font.Font(size=14)).grid(row=1, column=0, pady=10, padx=50, columnspan=3)
 
-        close_button = ttk.Button(popup, text="Close", command=popup.destroy)
-        close_button.grid(row=2, column=0, pady=10, columnspan=3)
+        # close_button = ttk.Button(popup, text="Close", command=popup.destroy)
+        # close_button.grid(row=2, column=0, pady=10, columnspan=3)
 
 
 
@@ -581,13 +591,14 @@ class RecordData:
             'heading_deg': [],
             'velocity': [],
             'trajectory': [],
-            'notes': ''
         }
 
         self.last_time_left = 0
         self.last_time_right = 0
         self.start_time_left = 0
         self.start_time_right = 0
+
+        self.additional_notes = ''
 
 
     def save_data(self):
@@ -621,7 +632,9 @@ class RecordData:
         post['traj_y'] = [i[1] for i in self.data['trajectory']][:min_len]
         post['user_id'] = self.operator_id
 
-        post['notes'] = self.data['notes']
+        post['notes'] = self.additional_notes
+
+        print(post['_id'], post['user_id'], post['notes'])
 
         id = self.test_collection.insert_one(post).inserted_id
         
