@@ -632,6 +632,12 @@ class RecordData:
         post['traj_y'] = [i[1] for i in self.data['trajectory']][:min_len]
         post['user_id'] = self.operator_id
 
+        test_name = self.test_name_var.get()
+        test_name = test_name.strip()
+        if len(test_name) > 0:
+            post['test_name'] = test_name
+
+
         post['additional_notes'] = self.additional_notes
 
         print(post['_id'], post['user_id'], post['additional_notes'])
@@ -693,7 +699,12 @@ class RecordData:
         self.start_recording_button.grid(row=12, column=0, pady=10, columnspan=3, sticky='nsew')
 
         ttk.Separator(self.tab, orient='horizontal').grid(row=20, column=0, pady=10, columnspan=3, sticky='sew')
+        
         ##Run Name
+        self.test_name_var = tk.StringVar()
+        Label(self.tab, text=f'Test Name: ', font=font.Font(size=14)).grid(row=25, column=0, sticky='nsw')
+        test_name_entry = ttk.Entry(self.tab, textvariable=self.test_name_var, width=15, font=font.Font(size=12))
+        test_name_entry.grid(row=25, column=1, columnspan=2, sticky='nsew')
 
 
         #Additional Notes
