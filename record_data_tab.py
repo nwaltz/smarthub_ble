@@ -609,7 +609,7 @@ class RecordData:
 
         test_datetime = datetime.now()
         datetime_str = f"{test_datetime.month}/{test_datetime.day}/{test_datetime.year}_{test_datetime.hour}:{test_datetime.minute}:{test_datetime.second}"
-
+        self.additional_notes = self.additional_notes_entry.get(1.0, 'end')
         time.sleep(0.1)
         self.update_graphs()
 
@@ -632,9 +632,9 @@ class RecordData:
         post['traj_y'] = [i[1] for i in self.data['trajectory']][:min_len]
         post['user_id'] = self.operator_id
 
-        post['notes'] = self.additional_notes
+        post['additional_notes'] = self.additional_notes
 
-        print(post['_id'], post['user_id'], post['notes'])
+        print(post['_id'], post['user_id'], post['additional_notes'])
 
         id = self.test_collection.insert_one(post).inserted_id
         
@@ -691,6 +691,16 @@ class RecordData:
 
         self.start_recording_button = ttk.Button(self.tab, text='Start Recording', command=lambda: self.start_recording(), state='disabled', style='Custom.TButton')
         self.start_recording_button.grid(row=12, column=0, pady=10, columnspan=3, sticky='nsew')
+
+        ttk.Separator(self.tab, orient='horizontal').grid(row=20, column=0, pady=10, columnspan=3, sticky='sew')
+        ##Run Name
+
+
+        #Additional Notes
+        Label(self.tab, text=f'Additional Information: ', font=font.Font(size=14)).grid(row=30, column=0, columnspan=3, sticky='nsew')
+        self.additional_notes_entry = tk.Text(self.tab, width=30, height=10, font=font.Font(size=12), bg='whitesmoke', fg='black', insertbackground='black')
+        self.additional_notes_entry.grid(row=34, column=0, columnspan=3, rowspan=30, sticky='nsew')
+
 
         self.tab.columnconfigure(0, minsize=50)
         self.tab.columnconfigure(1, minsize=100)
