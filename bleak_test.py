@@ -1,25 +1,37 @@
 import asyncio
 from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
+import time
 
-address = "A32DB278-7D5F-3CFF-433E-F1C464A46137"
+address = "28E204F5-61B4-ABA9-8483-CC63E00C1C4C"
+
+start_time = 0
+i = 0
+
+def update_data(data):
+    global i
+    i += 1
+    print(f'{time.time() - start_time}, {i/(time.time() - start_time)} {len(data)}')
 
 
 async def connect_to_device():
     try:
         notified = False
-        async with BleakClient(address) as client:
+        global start_time
+        async with BleakClient(address, timeout=15) as client:
+            start_time = time.time()
             while True:
                 if not notified:
                     notified = True
                     ch = "00002a56-0000-1000-8000-00805f9b34fb"
-                    await client.start_notify(ch, lambda ch, data: print(data))
+                    print(client.mtu_size)
+                    await client.start_notify(ch, lambda ch, data: update_data(data))
 
                 # else:
                 #     print("Device is not connected")
                 await asyncio.sleep(5)  # Wait a few seconds before checking again
-                rssi = await client.get_rssi()
-                print(f"RSSI: {rssi}")
+                # rssi = await client.get_rssi()
+                # print(f"RSSI: {rssi}")
 
     except BleakError as e:
         print(f"Failed to connect: {e}")
@@ -30,7 +42,7 @@ async def main():
     # print(devices)
     for d, val in devices.items():
         device, adv = val
-        if not "None" in str(device.name):
+        if "Smarthub" in str(device.name):
             print(f"Name: {device.name: <40}|     RSSI (signal strength): {adv.rssi: <10}|       Address: {d}")
             print()
     #     if isinstance(d.name, str):
