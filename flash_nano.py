@@ -50,10 +50,9 @@ def upload_code_to_arduino(output_file_path, port):
 def main():
     unit_id = input("Enter the unit ID: ")
     unit_side = input("Enter the unit side (l or r): ")
-    original_file_path = 'base_ble/arduino_code_copy/arduino_code_copy.ino'
-    output_file_path = f'base_ble/arduino_code_{unit_id}/arduino_code_{unit_id}.ino'
+    original_file_path = 'base_ble/arduino_code/arduino_code.ino'
+    output_file_path = f'base_ble/arduino_code_compiled/arduino_code_{unit_id}/arduino_code_{unit_id}.ino'
     ports = serial.tools.list_ports.comports()
-    # port = ports[-1]
     found_port = False
     
     for port, desc, _ in sorted(ports):

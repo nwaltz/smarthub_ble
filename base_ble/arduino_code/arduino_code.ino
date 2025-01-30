@@ -1,5 +1,7 @@
 #include <ArduinoBLE.h>
-#include <Arduino_LSM9DS1.h>
+#include "Arduino_BMI270_BMM150.h"
+// #include "ble/Gap.h"
+// #include <Arduino_LSM9DS1.h>
 //#include <Arduino_HTS221.h>       // Pressure Sensor Library
 //#include <Arduino_LPS22HB.h>      // Temperature Sensor Library
 
@@ -59,6 +61,9 @@ void setup()
   BLE.setDeviceName(deviceName.c_str());
   BLE.setLocalName(deviceName.c_str());
 
+  // BLE.setConnectionInterval(0x0010, 0x0020); // 20ms to 40ms
+  // BLE.setConnectionLatency(0);
+
   // Setting BLE Service Advertisment
   BLE.setAdvertisedService(customService);
 
@@ -82,39 +87,46 @@ void setup()
 void loop()
 {
   digitalWrite(LED_PIN, HIGH);
-  static long previousMillis = 0;
+  static unsigned long previousMillis = 0;
+  static unsigned long previousReadMillis = 0;
   // listen for BLE peripherals to connect:
   BLEDevice central = BLE.central();
   if ( central )
   {
-    Serial.print( "Connected to central: " );
-    Serial.println( central.address() );
+    float message_interval = (1.0 / 17) * 1000;
+    float sensor_interval = message_interval / 4.0;
+
     while ( central.connected() )
     {
-      float message_interval = 59;
-      float sensor_interval = 1 / 5.0 * message_interval;
-      unsigned long currentMillis = millis();
-      if ( currentMillis - previousMillis > message_interval )
+      
+      if ( millis() - previousMillis >= message_interval )
       {
-        previousMillis = currentMillis;
+        previousMillis = millis();
         float gyroX, gyroY, gyroZ;
         float accelX, accelY, accelZ;
         float accel_z_vec[4] = {0, 0, 0, 0};
         float gyro_y_vec[4] = {0, 0, 0, 0};
-        for (int i = 0; i < 4; i++) {
-          if ( IMU.gyroscopeAvailable() )
+
+        int i = 0;
+        while (i < 4) {
+          if (millis() - previousReadMillis >= sensor_interval)
           {
-            IMU.readGyroscope( gyroX, gyroY, gyroZ );
-            IMU.readAcceleration( accelX, accelY, accelZ );
-            // Convert gyro data to rps
-            gyroY = gyroY * M_PI / 180 - 0.017;
-            if (gyroY < 0.02)
-              gyroY = 0;
-            accel_z_vec[i] = accelZ;
-            gyro_y_vec[i] = gyroY;
-            Serial.println(gyroY, 3);
-            //Delay until time to take another measurement
-            delay(sensor_interval);
+            if ( IMU.gyroscopeAvailable() )
+            {
+              previousReadMillis = millis();
+
+              IMU.readGyroscope( gyroX, gyroY, gyroZ );
+              IMU.readAcceleration( accelX, accelY, accelZ );
+              // Convert gyro data to rps
+              gyroY = gyroY * M_PI / 180 - 0.017;
+              if (gyroY < 0.02 && gyroY > -0.02)
+                gyroY = 0;
+              accel_z_vec[i] = accelZ;
+              gyro_y_vec[i] = gyroY;
+              //Delay until time to take another measurement
+
+              i++;
+            }
           }
         }
         //Encode state data to transmit
@@ -131,50 +143,31 @@ void loop()
           }
         }
 
-        //if (accel_flipper == 1)     // state flipper gets tossed in accel byte
-        //{
-        //  state_accel += 8;
-        //}
-
         //Convert state values from into to byte
         stateUnion.unionInt = state_accel;
         byte state_accel_byte = stateUnion.unionByte;
         stateUnion.unionInt = state_gyro;
         byte state_gyro_byte = stateUnion.unionByte;
         //Compile overall byte array
-        //Serial.println("Transmitted Data: ");
-        // Serial.print("First Bytes in Message: ");
+
         message_bytes[0] = state_accel_byte;
         message_bytes[1] = state_gyro_byte;
-        // Serial.println(message_bytes[0]);
+
         for (int i = 2; i <= 8; i += 2) {
           messageUnion.unionInt = abs(ceil(accel_z_vec[i / 2 - 1] * 1000));
-          //Serial.println(messageUnion.unionInt);
+
           message_bytes[i] = messageUnion.unionBytes[0];
           message_bytes[i + 1] = messageUnion.unionBytes[1];
-          // Serial.print("Accel Val: ");
-          // Serial.println(messageUnion.unionInt);
-          // Serial.println("Accel Bytes: ");
-          // Serial.print(message_bytes[i]);
-          // Serial.println(message_bytes[i+1]);
           messageUnion.unionInt = abs(ceil(gyro_y_vec[i / 2 - 1] * 100));
-          //Serial.println(messageUnion.unionInt);
+
           message_bytes[i + 8] = messageUnion.unionBytes[0];
           message_bytes[i + 9] = messageUnion.unionBytes[1];
-          // Serial.print("Gyro Val: ");
-          // Serial.println(messageUnion.unionInt);
-          // Serial.println("Gyro Bytes: ");
-          // Serial.print(message_bytes[i+8]);
-          // Serial.println(message_bytes[i+9]);
         }
 
         //Send data over ble
         ble_data.writeValue(message_bytes, sizeof message_bytes);
-        //Flip accel flipper
-        accel_flipper = ! accel_flipper;
-      } // intervall
+
+      }  // if millis
     } // while connected
-    Serial.print( "Disconnected from central: " );
-    Serial.println( central.address() );
   } // if central
 } // loop

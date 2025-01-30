@@ -1,14 +1,12 @@
 smarthub/
+.smarthub/
 __pycache__/
 build/
-arduino-cli.exe
+base_ble/arduino_code_compiled/
+arduino-cli*
 Images/
 resources/
-at center notes.docx
-AT_center_presentation Nathan Waltz.pptx
 irb questions.docx
 purchase request 9_24.xlsx
+X509*
 X509-cert-6601925361457963781.pem
-Thesis methodology.docx
-masters thesis.docx
-workday tags.docx
