@@ -92,8 +92,8 @@ class RecordData:
 
     def set_operator_id(self, operator_id: str):
         """
-        param -> operator_id: 6 digit operator id (or whatever string you want)
-        returns -> None
+        :param operator_id: 6 digit operator id (or whatever string you want)
+        :returns None
 
         sets the operator id for the test in the title on top of all the graphs
         also checks to see if we've connected to smarthubs yet, if we have then enable the start recording button
@@ -109,8 +109,8 @@ class RecordData:
     @staticmethod
     def convert_from_raw(raw_data: bytearray) -> Tuple[list, list]:
         """
-        param -> raw_data: raw data as 18 len bytearray
-        returns ->  accel_data: list of 4 acceleration data floats
+        :param raw_data: raw data as 18 len bytearray
+        :returns  accel_data: list of 4 acceleration data floats
                     gyro_data: list of 4 gyro data floats
 
         converts raw data from smarthub to true acceleration and gyro data
@@ -172,9 +172,9 @@ class RecordData:
 
     def parse_data(self, left_message: bytearray, right_message: bytearray) -> None:
         """
-        param -> left_message: 18 len bytearray of raw data from left smarthub
+        :param left_message: 18 len bytearray of raw data from left smarthub
                  right_message: 18 len bytearray from right smarthub
-        returns -> None
+        :returns None
 
         parses raw data from smarthubs and appends to data dictionary
         handles time calculation, knowing that the sensor data is acquired every 1/68 seconds
@@ -205,8 +205,8 @@ class RecordData:
 
     def update_graphs(self) -> None:
         """
-        param -> None
-        returns -> None
+        :param None
+        :returns None
 
         this function is called every 400 ms to update the graphs with new data
         it filters the gyro data with a low pass filter
@@ -351,8 +351,8 @@ class RecordData:
 
     def set_background(self, data: dict) -> None:
         """
-        param -> data: dictionary of data to set as background
-        returns -> None
+        :param data: dictionary of data to set as background
+        :returns None
 
         sets the background of the graphs to the data passed in
         if we haven't started recording yet, we set the line position to the number of lines in the graph (this gets used in update_graphs)
@@ -377,8 +377,8 @@ class RecordData:
 
     def select_calibration(self) -> None:
         """
-        param -> None
-        returns -> None
+        :param None
+        :returns None
 
         selects the calibration from the calibration combobox
         only appears after we're ready to start a test
@@ -400,8 +400,8 @@ class RecordData:
 
     def update_calibration(self, event: tk.Event):
         """
-        param -> event: tk.Event (not used, given by callback)
-        returns -> None
+        :param event: tk.Event (not used, given by callback)
+        :returns None
 
         updates the calibration values based on the calibration selected in the combobox
         """
@@ -416,9 +416,9 @@ class RecordData:
 
     async def connect_to_device(self, left_address: str, right_address: str) -> None:
         """
-        param -> left_address: address of left smarthub (this isn't actually a string but it acts as one)
+        :param left_address: address of left smarthub (this isn't actually a string but it acts as one)
                  right_address: address of right smarthub
-        returns -> None
+        :returns None
 
         async loop because we have bleak stuff going on
 
@@ -461,10 +461,10 @@ class RecordData:
 
                     def update_data(_, data: bytearray, side: str) -> None:
                         """
-                        param -> _: not used, given by callback
+                        :param _: not used, given by callback
                                     data: 18 len bytearray of raw data
                                     side: 'left' or 'right' to know which smarthub the data is from
-                        returns -> None
+                        :returns None
 
                         updates the data from the smarthubs
                         can't send data to parse_data until we have both left and right data
@@ -502,10 +502,10 @@ class RecordData:
 
                     async def start_notifications(self, left_client: BleakClient, right_client: BleakClient, ch: str) -> None:
                         """
-                        param -> left_client: BleakClient object for left smarthub
+                        :param left_client: BleakClient object for left smarthub
                                  right_client: BleakClient object for right smarthub
                                  ch: uuid for the characteristic we're reading from
-                        returns -> None
+                        :returns None
 
                         starts notifications for the left and right smarthubs
                         """
@@ -593,9 +593,9 @@ class RecordData:
 
     def missing_smarthubs(self, left: bool = False, right: bool = False) -> None:
         """
-        param -> left: bool, if left smarthub is missing
+        :param left: bool, if left smarthub is missing
                  right: bool, if right smarthub is missing
-        returns -> None
+        :returns None
 
         popup to show if we can't find one or both of the smarthubs
         """
@@ -619,8 +619,8 @@ class RecordData:
 
     async def _find_smarthubs(self, smarthub_id: str) -> None:
         """
-        param -> smarthub_id: id of the smarthub we're looking for
-        returns -> None
+        :param smarthub_id: id of the smarthub we're looking for
+        :returns None
 
         gets called when we click the find smarthubs button
         looks for the left and right smarthubs with the id we're looking for
@@ -671,8 +671,8 @@ class RecordData:
 
     def connect_smarthubs(self, smarthub_id: str) -> None:
         """
-        param -> smarthub_id: id of the smarthub we're looking for
-        returns -> None
+        :param smarthub_id: id of the smarthub we're looking for
+        :returns None
 
         gets called when we click the connect button
         starts a new thread to run the async function _find_smarthubs
@@ -695,8 +695,8 @@ class RecordData:
 
     def start_recording(self) -> None:
         """
-        param -> None
-        returns -> None
+        :param None
+        :returns None
 
         starts and stops recording based on the button text
         if you click the button and nothing happens it means there was an error
@@ -717,8 +717,8 @@ class RecordData:
 
     def reset_data(self) -> None:
         """
-        param -> None
-        returns -> None
+        :param None
+        :returns None
 
         resets the data dictionary to empty lists
         has to be reset every time we start recording
@@ -746,8 +746,8 @@ class RecordData:
 
     def save_data(self) -> None:
         """
-        param -> None
-        returns -> None
+        :param None
+        :returns None
 
         saves the data to the database
         gets called after we stop recording
@@ -811,8 +811,8 @@ class RecordData:
 
     def create_widgets(self) -> None:
         """
-        param -> None
-        returns -> None
+        :param None
+        :returns None
 
         creates the widgets for the tab
         this doesn't actually script anything it just generates the framework in the tab (except graphs)
@@ -881,8 +881,8 @@ class RecordData:
 
     def create_graphs(self) -> None:
         """
-        param -> None
-        returns -> None
+        :param None
+        :returns None
 
         creates the subplots for the tab
         have to use the special tkinter canvas widget to display the graphs
