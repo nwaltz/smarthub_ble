@@ -10,7 +10,7 @@ import json
 import bisect
 import pandas as pd
 import math
-from tk_slider_widget import Slider
+from gui.tk_slider_widget import Slider
 
 import multiprocessing as mp
 

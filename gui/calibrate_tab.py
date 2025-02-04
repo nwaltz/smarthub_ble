@@ -1,5 +1,5 @@
-from view_data_tab import ViewData
-from record_data_tab import RecordData
+from gui.view_data_tab import ViewData
+from gui.record_data_tab import RecordData
 
 from scipy.optimize import minimize, fsolve
 
@@ -9,7 +9,9 @@ from matplotlib.ticker import MultipleLocator
 
 import asyncio
 import tkinter as tk
-from tkinter import font, ttk, Label
+from tkinter import font, Label
+from tkinter import ttk
+
 import threading
 import pandas as pd
 import struct
@@ -45,7 +47,7 @@ class Calibrate:
 
     def __init__(self, tab, database, filepath, screen_size):
         self.tab = tab
-        self.test_config = database.test_config
+        self.test_config = database.Smarthub.test_config
         self.filepath = filepath
         self.screen_width, self.screen_height = screen_size
 
@@ -74,7 +76,7 @@ class Calibrate:
     def get_image_instances(self, image_names):
         images = []
         for image_name in image_names:
-            image = Image.open(f'{self.filepath}/new_resources/{image_name}')
+            image = Image.open(f'{self.filepath}/assets/{image_name}')
             width, height = image.size
             image = self.resize_image(image, self.image_width, self.image_height)
             images.append(image)
@@ -231,6 +233,8 @@ class Calibrate:
 
                     ch = "00002a56-0000-1000-8000-00805f9b34fb"
 
+                    self.notifications_started = False
+
                     # await left_client.start_notify(ch, self.update_data, side='left')
                     self.start_recording_button['state'] = 'normal'
 
@@ -262,6 +266,7 @@ class Calibrate:
                             pass
 
                     async def start_notifications(self, left_client, right_client, ch):
+                        self.notifications_started = True
                         await left_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'left'))
                         await right_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'right'))
 
@@ -283,21 +288,9 @@ class Calibrate:
 
                             # update_graphs_thread.join()
                             return
-                        else:
-                            await left_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'left'))
-                            await right_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'right'))
-
-                            # update_graphs_thread = threading.Thread(target=self.update_graphs, daemon=True)
-                            # update_graphs_thread.start()
-
-                        # await left_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'left'))
-                        # await right_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'right'))
-
-                        # read_message_left = await left_client.read_gatt_char(ch)
-                        # read_message_right = await right_client.read_gatt_char(ch)
-
-                        # self.parse_data(read_message_left, read_message_right)
-                        await start_notifications(self, left_client, right_client, ch)
+                        
+                        if not self.notifications_started:
+                            await start_notifications(self, left_client, right_client, ch)
                         await asyncio.sleep(1)
 
                         if time.time() - self.start_time > 2:
@@ -322,6 +315,8 @@ class Calibrate:
         except OSError as e:
             popup = tk.Toplevel()
             ttk.Label(popup, text="Device went out of range, please retry connection", font=font.Font(size=14)).grid(row=0, column=0, pady=10, padx=50, columnspan=3)
+            print(f"OS error (devices are most likely disconnected): {e}")
+
             return
         except TimeoutError as e:
             print(f"Timeout error: {e}")
@@ -331,9 +326,7 @@ class Calibrate:
                 self.missing_smarthubs(left=True)
             if self.right_smarthub_connection['text'] != 'Connected':
                 self.missing_smarthubs(right=True)
-        except OSError as e:
-            print(f"OS error (devices are most likely disconnected): {e}")
-
+        
         # self.perform_calibration()
 
         # self.save_data()

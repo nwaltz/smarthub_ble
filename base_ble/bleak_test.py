@@ -42,8 +42,10 @@ async def main():
     # print(devices)
     for d, val in devices.items():
         device, adv = val
-        if "Smarthub" in str(device.name):
+        if (device.name is not None):
+        # if "Smarthub" in str(device.name):
             print(f"Name: {device.name: <40}|     RSSI (signal strength): {adv.rssi: <10}|       Address: {d}")
+            print(type(d))
             print()
     #     if isinstance(d.name, str):
     #         if f'Left Smarthub: {smarthub_id}' == d.name:

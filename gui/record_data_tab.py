@@ -14,7 +14,7 @@ from matplotlib.figure import Figure
 from pymongo import MongoClient
 from bleak import BleakScanner, BleakClient, BleakError
 
-from view_data_tab import ViewData
+from gui.view_data_tab import ViewData
 
 from base_ble.params import (
     DATE_DIR, DATE_NOW, left_gain, left_offset, 

@@ -1,6 +1,7 @@
 from tkinter import *
 from tkinter import ttk
-# from retrieve_data import *
+import sv_ttk
+# # from retrieve_data import *
 import multiprocessing as mp
 import sys
 import os
@@ -10,9 +11,9 @@ import asyncio
 
 from pathlib import Path
 
-from view_data_tab import ViewData
-from record_data_tab import RecordData
-from calibrate_tab import Calibrate
+from gui.view_data_tab import ViewData
+from gui.record_data_tab import RecordData
+from gui.calibrate_tab import Calibrate
 
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
@@ -30,7 +31,7 @@ else:
     base_path = os.path.dirname(os.path.abspath(__file__))
     file_path = base_path 
     data_path = file_path
-    theme_file_path = os.path.join(base_path, 'forest-dark.tcl')
+    theme_file_path = os.path.join(base_path, 'gui/theme/forest-dark.tcl')
 
 print('Base path:', base_path)
 
@@ -48,8 +49,8 @@ def connect_to_db_certificate(path_to_cert):
     # uri = "mongodb+srv://<username>:<password>@smarthub.gbdlpxs.mongodb.net/?retryWrites=true&w=majority"
     uri = "mongodb+srv://smarthub.gbdlpxs.mongodb.net/?authSource=$external&authMechanism=MONGODB-X509"
     client = MongoClient(uri, tls=True, tlsCertificateKeyFile=path_to_cert)
-    smarthub_db = client.Smarthub
-    return smarthub_db
+    # smarthub_db = client.Smarthub
+    return client
 
 def initalize_gui(db):
     root = Tk()
@@ -111,6 +112,7 @@ def authenticate():
     root.title('Authentication')
     root.geometry('300x200')
     root.resizable(False, False)
+
     style = ttk.Style(root)
     root.tk.call('source', theme_file_path)
     style.theme_use('forest-dark')
@@ -129,28 +131,6 @@ def authenticate():
 
     root.mainloop()
 
-def extract_files_once():
-    # Persistent extraction directory (AppData in this example)
-    extraction_dir = os.path.join(os.getenv('LOCALAPPDATA'), 'MyAppTemp')
-    version_marker = Path(extraction_dir, "version.txt")
-    current_version = "v1.0"
-
-    # Check if extraction is needed
-    if version_marker.exists() and version_marker.read_text() == current_version:
-        print("Reusing previously extracted files.")
-    else:
-        # Remove old extraction and create fresh directory
-        if os.path.exists(extraction_dir):
-            shutil.rmtree(extraction_dir)
-        os.makedirs(extraction_dir, exist_ok=True)
-
-        # Write a version marker
-        version_marker.write_text(current_version)
-        print("Extracting files for the first time...")
-
-    # Path management if needed for the rest of the app
-    sys.path.append(extraction_dir)
-
 
 if __name__ == '__main__':
     # extract_files_once()
@@ -162,7 +142,7 @@ if __name__ == '__main__':
             try:
                 print('Authenticating with', file)
                 db = connect_to_db_certificate(file)
-                collections = db.list_collection_names()
+                collections = db.Smarthub.list_collection_names()
                 valid_file = True
                 initalize_gui(db)
                 break
