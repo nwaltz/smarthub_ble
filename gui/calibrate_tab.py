@@ -45,11 +45,12 @@ def draw_grid_lines(tab):
 
 class Calibrate:
 
-    def __init__(self, tab, database, filepath, screen_size):
+    def __init__(self, tab, database, filepath, screen_size, config):
         self.tab = tab
         self.test_config = database.Smarthub.test_config
         self.filepath = filepath
         self.screen_width, self.screen_height = screen_size
+        self.config = config
 
         self.data = {
             'gyro_right': [],
@@ -233,66 +234,107 @@ class Calibrate:
 
                     ch = "00002a56-0000-1000-8000-00805f9b34fb"
 
-                    self.notifications_started = False
-
-                    # await left_client.start_notify(ch, self.update_data, side='left')
                     self.start_recording_button['state'] = 'normal'
 
+                    # once we successfully start our notifications we don't want to start them again
+                    self.notifications_started = False
+
+                    # reset data every time we've processed new values
                     self.new_data_left = None
                     self.new_data_right = None
 
-                    def update_data(_, data, side):
+                    def update_data(_, data: bytearray, side: str) -> None:
+                        """
+                        :param _: not used, given by callback
+                                    data: 18 len bytearray of raw data
+                                    side: 'left' or 'right' to know which smarthub the data is from
+                        :returns None
+
+                        updates the data from the smarthubs
+                        can't send data to parse_data until we have both left and right data
+                        wait until we've gotten a message from both, if the new data is from a side we already have data from, update the last_{}_message
+                        after we send data to parse_data, clear it so we can get new data
+
+                        see thesis for details i have a flowchart there
+                        """
+
+                        # this just runs on first function call, kinda like static keyword in C
                         if not hasattr(self, 'last_left_message'):
                             self.last_left_message = None
                             self.last_right_message = None
-                            self.last_time = time.time()
 
                         if side == 'left':
+                            # if it's actually new data and not just a repeat
                             if self.last_left_message != data:
                                 self.last_left_message = data
                                 self.new_data_left = data
+                                # if there's data on the other side too, send it to parse_data and clear buffers
                                 if self.new_data_right is not None:
                                     self.parse_data(self.new_data_left, self.new_data_right)
                                     self.new_data_left = None
                                     self.new_data_right = None
                         elif side == 'right':
+                            # if it's actually new data and not just a repeat
                             if self.last_right_message != data:
                                 self.last_right_message = data
                                 self.new_data_right = data
+                                # if there's data on the other side too, send it to parse_data and clear buffers
                                 if self.new_data_left is not None:
                                     self.parse_data(self.new_data_left, self.new_data_right)
                                     self.new_data_left = None
                                     self.new_data_right = None
-                            pass
 
-                    async def start_notifications(self, left_client, right_client, ch):
+                    async def start_notifications(self, left_client: BleakClient, right_client: BleakClient, ch: str) -> None:
+                        """
+                        :param left_client: BleakClient object for left smarthub
+                                 right_client: BleakClient object for right smarthub
+                                 ch: uuid for the characteristic we're reading from
+                        :returns None
+
+                        starts notifications for the left and right smarthubs
+                        """
                         self.notifications_started = True
                         await left_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'left'))
                         await right_client.start_notify(ch, lambda ch, data: update_data(ch, data, 'right'))
 
+                    # just so we know to only intialize the loop once
                     initial_loop = True
+
+                    # this continually cycles, even if we're not recording
                     while True:
+
+                        # if we haven't started recording, just sit here and wait
                         if self.recording_started == False:
                             self.recording_stopped = False
-                            await asyncio.sleep(0)
+                            # await asyncio.sleep(0)
+                            initial_loop = True
                             continue
 
-                        if initial_loop:
-                            self.start_time = time.time()
-                            initial_loop = False
-
+                        # if we've stopped recording, stop notifications
+                        # this should only run once, since next loop iteration will get stuck in the first if statement
                         if self.recording_stopped == True:
                             self.recording_started = False
                             await left_client.stop_notify(ch)
                             await right_client.stop_notify(ch)
 
+                            self.notifications_started = False
+
                             # update_graphs_thread.join()
-                            return
-                        
+                            continue
+                            
+                        # if we've started recording, start updating our graphs and make sure our data dictionary is empty
+                        if initial_loop:
+                            self.start_time = time.time()
+                            initial_loop = False
+
+                        # if we've started recording, start notifications
                         if not self.notifications_started:
                             await start_notifications(self, left_client, right_client, ch)
+
+                        # all the other stuff is happening asynchronously, so we can just wait here and let the other threads do their thing
                         await asyncio.sleep(1)
 
+                        # this doesn't always work since the is_connected flag doesn't always update properly
                         if time.time() - self.start_time > 2:
                             if not left_client.is_connected:
                                 self.left_smarthub_connection['text'] = 'Disconnected'
@@ -378,18 +420,23 @@ class Calibrate:
         self.right_smarthub_connection['text'] = 'Disconnected'
         self.right_smarthub_connection['foreground'] = '#a92222'
 
-        devices = await BleakScanner.discover(timeout=10.0)
+        devices = await BleakScanner.discover(timeout=5.0, return_adv=True)
+
         left_address = None
         right_address = None
-        for d in devices:
-            print(d)
-            if isinstance(d.name, str):
-                if f'Left Smarthub: {smarthub_id}' == d.name:
+
+        for d, val in devices.items():
+            device, adv = val
+            if adv.local_name is None:
+                continue
+            print(d, adv.local_name)
+            if isinstance(adv.local_name, str):
+                if f'Left Smarthub: {smarthub_id}' == adv.local_name:
                     print("Left Smarthub Identified")
-                    left_address = d.address
-                if f'Right Smarthub: {smarthub_id}' == d.name:
+                    left_address = d
+                if f'Right Smarthub: {smarthub_id}' == adv.local_name:
                     print("Right Smarthub Identified")
-                    right_address = d.address
+                    right_address = d
         
         if left_address is None or right_address is None:
             self.missing_smarthubs(left=left_address is None, right=right_address is None)
@@ -446,11 +493,11 @@ class Calibrate:
 
             self.recording_started = False
 
-            self.calibration_sequence = []
-            self.current_calibration_step = 0
+            # self.calibration_sequence = []
+            # self.current_calibration_step = 0
 
-            self.start_recording_button['text'] == 'Start Calibration'
-            self.set_calibration_sequence()
+            # self.start_recording_button['text'] == 'Start Calibration'
+            # self.set_calibration_sequence()
 
     def perform_calibration(self):
         res = fsolve(minimize_function, [20,20,1,1], args=self.calibration_sequence)
@@ -553,7 +600,7 @@ class Calibrate:
         # width, height = image.size
         # # image = image.resize((self.image_width, self.image_height))
         # image = self.resize_image(image, self.image_width, self.image_height)
-        # if self.recording_stopped:
+        # if not hasattr(self.calibration_sequence[self.current_calibration_step], 'images'):
         #     return
         
         images = self.calibration_sequence[self.current_calibration_step]['images']
