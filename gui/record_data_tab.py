@@ -50,12 +50,13 @@ class RecordData:
 
     """
 
-    def __init__(self, tab: tk.Frame, database: MongoClient, filepath: str, screen_size: Tuple[int, int]) -> None: 
+    def __init__(self, tab: tk.Frame, database: MongoClient, filepath: str, screen_size: Tuple[int, int], config: dict) -> None: 
         self.tab = tab
         self.test_collection = database.Smarthub.test_collection
-        self.test_config = database.test_config
+        self.test_config = database.Smarthub.test_config
         self.filepath = filepath
         self.screen_width, self.screen_height = screen_size
+        self.config = config
         self.create_widgets()
 
 
@@ -281,6 +282,9 @@ class RecordData:
             print('Value error in filtering, retrying')
             self.tab.after(int(update_frequency/4), self.update_graphs)
             return
+        
+        gyro_left_smoothed = gyro_left_smoothed*self.left_gain
+        gyro_right_smoothed = gyro_right_smoothed*self.right_gain
 
         # Derive distance based on data:
         self.data['dist_m'][:] = get_distance_m(data['time_from_start'], gyro_left_smoothed,
@@ -408,10 +412,17 @@ class RecordData:
         calibration_name = event.widget.get()
         calibration = self.test_config.find_one({'calibration_name': calibration_name, 'smarthub_id': self.smarthub_id})
 
+        if 'diameter' not in calibration:
+            calibration['diameter'] = 1
         self.diameter = calibration['diameter']
         self.dist_wheels = calibration['wheel_dist']
         self.left_gain = calibration['left_gain']
         self.right_gain = calibration['right_gain']
+
+        print()
+        print(f'Calibration set to {calibration_name}')
+        print(f'Diameter: {self.diameter}, Distance between wheels: {self.dist_wheels}, Left Gain: {self.left_gain}, Right Gain: {self.right_gain}')
+        print()
 
 
     async def connect_to_device(self, left_address: str, right_address: str) -> None:
@@ -634,22 +645,24 @@ class RecordData:
 
         # adjust timeout if having a hard time finding them
         # also run bleak_test to see rssi vals
-        devices = await BleakScanner.discover(timeout=8.0)
+        # devices = await BleakScanner.discover(timeout=8.0)
+        devices = await BleakScanner.discover(timeout=5.0, return_adv=True)
 
         left_address = None
         right_address = None
 
-        for d in devices:
-            if d.name is None:
+        for d, val in devices.items():
+            device, adv = val
+            if adv.local_name is None:
                 continue
-            print(d)
-            if isinstance(d.name, str):
-                if f'Left Smarthub: {smarthub_id}' == d.name:
+            print(d, adv.local_name)
+            if isinstance(adv.local_name, str):
+                if f'Left Smarthub: {smarthub_id}' == adv.local_name:
                     print("Left Smarthub Identified")
-                    left_address = d.address
-                if f'Right Smarthub: {smarthub_id}' == d.name:
+                    left_address = d
+                if f'Right Smarthub: {smarthub_id}' == adv.local_name:
                     print("Right Smarthub Identified")
-                    right_address = d.address
+                    right_address = d
         
         if left_address is None or right_address is None:
             self.missing_smarthubs(left=left_address is None, right=right_address is None)
@@ -788,6 +801,7 @@ class RecordData:
         post['distance_m'] = self.data['dist_m'][:min_len]
         post['heading_deg'] = self.data['heading_deg'][:min_len]
         post['displacement_m'] = self.data['disp_m'][:min_len]
+        post['velocity'] = self.data['velocity'][:min_len]
         post['traj_x'] = [i[0] for i in self.data['trajectory']][:min_len]
         post['traj_y'] = [i[1] for i in self.data['trajectory']][:min_len]
         post['user_id'] = self.operator_id
@@ -919,3 +933,4 @@ class RecordData:
         self.canvas.draw()
         self.canvas.flush_events()  
         self.canvas.get_tk_widget().grid(row=1, column=3, columnspan=100, rowspan=100, padx=0, pady=0, sticky='nsew')
+
