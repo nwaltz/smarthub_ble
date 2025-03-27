@@ -1,5 +1,4 @@
 from scipy.optimize import minimize, fsolve
-from params import IN_TO_M
 import numpy as np
 import json
 import matplotlib.pyplot as plt
@@ -405,7 +404,8 @@ def minimize_function(p, calibration_list):
     # eq4 = 1 - 360/np.sum(headings)
 
 
-
+    eq1 = eq1*18
+    eq2 = eq2*18
 
     return [eq1, eq2, eq3, eq4]
 
