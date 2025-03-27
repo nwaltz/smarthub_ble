@@ -1,4 +1,5 @@
 import os
+import platform
 import subprocess
 import serial.tools.list_ports
 
@@ -37,21 +38,36 @@ def modify_arduino_code(unit_id, unit_side, original_file_path, output_file_path
 
 def upload_code_to_arduino(output_file_path, port):
     # Command to compile and upload the code
-    command = [
-        "./arduino-cli lib install 'Arduino_LSM9DS1' && ./arduino-cli lib install 'ArduinoBLE' && ./arduino-cli lib install 'Arduino_BMI270_BMM150' &&",
-        "./arduino-cli", "compile", "--fqbn", "arduino:mbed_nano:nano33ble", output_file_path,
-        "&&",
-        "./arduino-cli", "upload", "-p", port, "--fqbn", "arduino:mbed_nano:nano33ble", output_file_path
-    ]
-    
+    os_name = platform.system()
+    if os_name == 'Windows':
+        command = [
+            "arduino/arduino-cli.exe", "lib", "install", "Arduino_LSM9DS1",
+            "&&", "arduino-cli.exe", "lib", "install", "ArduinoBLE",
+            "&&", "arduino-cli.exe", "lib", "install", "Arduino_BMI270_BMM150",
+            "&&", "arduino-cli.exe", "compile", "--fqbn", "arduino:mbed_nano:nano33ble",
+            output_file_path, "&&",
+            "arduino-cli.exe", "upload", "-p", port, "--fqbn", "arduino:mbed_nano:nano33ble",
+            output_file_path
+        ]
+    elif os_name == 'Darwin':
+        command = [
+            "./arduino/arduino-cli", "lib", "install", "Arduino_LSM9DS1",
+            "&&", "./arduino/arduino-cli", "lib", "install", "ArduinoBLE",
+            "&&", "./arduino/arduino-cli", "lib", "install", "Arduino_BMI270_BMM150",
+            "&&", "./arduino/arduino-cli", "compile", "--fqbn", "arduino:mbed_nano:nano33ble",
+            output_file_path, "&&",
+            "./arduino/arduino-cli", "upload", "-p", port, "--fqbn", "arduino:mbed_nano:nano33ble",
+            output_file_path
+        ]
+    print(os_name)
     # Execute the command
     subprocess.run(" ".join(command), shell=True)
 
 def main():
     unit_id = input("Enter the unit ID: ")
     unit_side = input("Enter the unit side (l or r): ")
-    original_file_path = 'base_ble/arduino_code/arduino_code.ino'
-    output_file_path = f'base_ble/arduino_code_compiled/arduino_code_{unit_id}/arduino_code_{unit_id}.ino'
+    original_file_path = 'arduino/arduino_code/arduino_code.ino'
+    output_file_path = f'arduino/arduino_code_compiled/arduino_code_{unit_id}/arduino_code_{unit_id}.ino'
     ports = serial.tools.list_ports.comports()
     found_port = False
     
