@@ -1,25 +1,17 @@
 import tkinter as tk
 from tkinter import font, Label
 from tkinter import ttk
-# import cred
-import sys
 import time
-import os
 import csv
-import json
 import bisect
 import pandas as pd
 import math
 from gui.tk_slider_widget import Slider
 
-import multiprocessing as mp
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from matplotlib.ticker import MultipleLocator
-
-from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
 
 from base_ble.calc import (
     get_displacement_m,
@@ -48,8 +40,23 @@ def draw_grid_lines(tab):
         ttk.Separator(tab, orient='vertical').grid(row=0, column=i, rowspan=rows, sticky='nse')
 
 class ViewData:
+    """
+    class for showing data and downloading information
 
-    def __init__(self, tab, record_data_tab, database, filepath, screen_size):
+    functions:
+    find_test_runs -> retrieves all test runs for a given id, makes drop down menu to select test run
+    zoom -> zooms in or out of the graph
+    download_metrics -> downloads metrics data
+    download_raw_data -> downloads raw data
+    delete_test -> deletes a test run
+    set_record_background -> sets background of record_data_tab to the current test run
+    show_data -> shows data on the graph
+    load_csv -> loads a csv file into the window and shows plots
+    initialize_tab -> sets up user id entry and load csv button
+    
+    """
+
+    def __init__(self, tab, record_data_tab, database, filepath, screen_size, config):
         # notebook object
         self.tab = tab
         # instance of record_data_tab, used to set background
@@ -58,9 +65,10 @@ class ViewData:
         self.test_collection = database.Smarthub.test_collection
         # filepath to save data
         self.filepath = filepath
-
         # screen params
         self.screen_width, self.screen_height = screen_size
+        # config info
+        self.config = config
 
         # graph info
         self.last_scale_update = time.time()
@@ -70,49 +78,6 @@ class ViewData:
 
         # self.initialize_tab(auto=True)
         self.initialize_tab(auto=False)
-        
-        # make a config file if it doesn't exist
-        # read in config file if it does
-        if not os.path.exists('config.json'):
-            self.config = {}
-        else:
-            with open('config.json', 'r') as config_file:
-                self.config = json.load(config_file)
-
-
-    def update_config(self, key, value=None):
-        """
-        :param key: variable name to save
-        :param value: if None, removes key from config
-                      else inputs value to config
-
-        used to create persistent user config information between sessions
-        not currently used, but if user settings can be applied this should be included
-        
-        """
-        # most recent config info is retrieved from file and stored in self.config. no need to manually set self.config
-        # if value is none, key is removed from config
-        with open('config.json', 'r') as config_file:
-            self.config = json.load(config_file)
-            if value == None:
-                self.config.pop(key)
-            else:
-                self.config[key] = value
-
-        with open('config.json', 'w') as config_file:
-            json.dump(self.config, config_file)
-
-    def on_exit(self):
-        """
-        :param: None
-        :returns None
-
-        used to save user settings on exit
-        """
-        self.update_config('gridlines', self.trajectory_gridlines_check.get())
-        self.client.close()
-        sys.exit()
-
 
     def find_test_runs(self, user_id, auto=False):
         """
@@ -179,7 +144,8 @@ class ViewData:
                 self.dpi -= 10
                 self.show_data(None, dpi=self.dpi)
 
-    def download_metrics(self, data):
+    @staticmethod
+    def download_metrics(data, name=None):
         """
         :param data: data to export
         :returns None
@@ -200,11 +166,15 @@ class ViewData:
                                     trajectory_y=data['traj_y'],
                                     metrics=metrics)
 
-        # ask where to save file
-        filename = tk.filedialog.asksaveasfilename(title='Save Metrics', filetypes=[('CSV files', '*.csv')])
-        # if user exits without selecting a filename, return
-        if filename == '':
-            return
+        if name is None:
+            # ask where to save file
+            filename = tk.filedialog.asksaveasfilename(title='Save Metrics', filetypes=[('CSV files', '*.csv')])
+            print("saving to: ", filename)
+            # if user exits without selecting a filename, return
+            if filename == '':
+                return
+        else:
+            filename = name
         
         # if they don't put the .csv, add it ourselves
         if '.csv' not in filename:
@@ -443,7 +413,7 @@ class ViewData:
         self.record_data_tab.set_background(data)
         
     
-    def show_data(self, event, dpi=100, gridlines=False, data=None):
+    def show_data(self, event, dpi=100, gridlines=None, data=None):
         """
         :param event: event that triggered the function, unused
         :param dpi: dots per inch for the graph
@@ -456,6 +426,13 @@ class ViewData:
 
         populates plots and slider, makes figures if they don't exist
         """
+        if gridlines is None:
+            if 'gridlines' in self.config:
+                gridlines = self.config['gridlines']
+            else:
+                gridlines = False
+        else:
+            self.config['gridlines'] = gridlines
 
         # update class instance of dpi
         self.dpi = dpi
