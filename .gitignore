@@ -2,6 +2,7 @@ smarthub/
 .smarthub/
 __pycache__/
 build/
+env/
 base_ble/arduino_code_compiled/
 arduino-cli*
 Images/
