@@ -1,6 +1,7 @@
 import os
 import subprocess
 import serial.tools.list_ports
+import platform
 
 def modify_arduino_code(unit_id, unit_side, original_file_path, output_file_path):
     # Read the original Arduino code
@@ -37,19 +38,33 @@ def modify_arduino_code(unit_id, unit_side, original_file_path, output_file_path
 
 def upload_code_to_arduino(output_file_path, port):
     # Command to compile and upload the code
-    command = [
-        "arduino-cli lib install 'Seeed Arduino LSM6DS3' &&",
-        "arduino-cli lib install 'ArduinoBLE' &&",
-        "arduino-cli config init --overwrite &&",
-        "arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json &&",
-        "arduino-cli core update-index &&",
-        "arduino-cli core install Seeeduino:mbed &&",
-        f"arduino-cli compile --fqbn Seeeduino:mbed:xiaonRF52840Sense {output_file_path} &&",
-        f"arduino-cli upload -p {port} --fqbn Seeeduino:mbed:xiaonRF52840Sense {output_file_path}"
-    ]
+    os_name = platform.system()
+    if os_name == 'Darwin':
+        commands = [
+            ["arduino-cli lib install 'Seeed Arduino LSM6DS3'"],
+            ["arduino-cli lib install 'ArduinoBLE'"],
+            ["arduino-cli config init --overwrite"],
+            ["arduino-cli config add board_manager.additional_urls https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json"],
+            ["arduino-cli core update-index"],
+            ["arduino-cli core install Seeeduino:mbed"],
+            [f"arduino-cli compile --fqbn Seeeduino:mbed:xiaonRF52840Sense {output_file_path}"],
+            [f"arduino-cli upload -p {port} --fqbn Seeeduino:mbed:xiaonRF52840Sense {output_file_path}"]
+        ]
+    elif os_name == 'Windows':
+        commands = [
+            ["arduino/arduino-cli.exe", "lib", "install", "Seeed Arduino LSM6DS3"],
+            ["arduino/arduino-cli.exe", "lib", "install", "ArduinoBLE"],
+            ["arduino/arduino-cli.exe", "config", "init", "--overwrite"],
+            ["arduino/arduino-cli.exe", "config", "add", "board_manager.additional_urls", "https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json"],
+            ["arduino/arduino-cli.exe", "core", "update-index"],
+            ["arduino/arduino-cli.exe", "core", "install", "Seeeduino:mbed"],
+            ["arduino/arduino-cli.exe", "compile", "--fqbn", "Seeeduino:mbed:xiaonRF52840Sense", output_file_path],
+            ["arduino/arduino-cli.exe", "upload", "-p", port, "--fqbn", "Seeeduino:mbed:xiaonRF52840Sense", output_file_path]
+        ]
     
     # Execute the command
-    subprocess.run(" ".join(command), shell=True)
+    for cmd in commands:
+        subprocess.run(cmd, shell=True)
 
 def main():
     unit_id = input("Enter the unit ID: ")
