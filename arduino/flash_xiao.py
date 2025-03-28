@@ -52,14 +52,14 @@ def upload_code_to_arduino(output_file_path, port):
         ]
     elif os_name == 'Windows':
         commands = [
-            ["arduino/arduino-cli.exe", "lib", "install", "Seeed Arduino LSM6DS3"],
-            ["arduino/arduino-cli.exe", "lib", "install", "ArduinoBLE"],
-            ["arduino/arduino-cli.exe", "config", "init", "--overwrite"],
-            ["arduino/arduino-cli.exe", "config", "add", "board_manager.additional_urls", "https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json"],
-            ["arduino/arduino-cli.exe", "core", "update-index"],
-            ["arduino/arduino-cli.exe", "core", "install", "Seeeduino:mbed"],
-            ["arduino/arduino-cli.exe", "compile", "--fqbn", "Seeeduino:mbed:xiaonRF52840Sense", output_file_path],
-            ["arduino/arduino-cli.exe", "upload", "-p", port, "--fqbn", "Seeeduino:mbed:xiaonRF52840Sense", output_file_path]
+            ["arduino-cli.exe", "lib", "install", "Seeed Arduino LSM6DS3"],
+            ["arduino-cli.exe", "lib", "install", "ArduinoBLE"],
+            ["arduino-cli.exe", "config", "init", "--overwrite"],
+            ["arduino-cli.exe", "config", "add", "board_manager.additional_urls", "https://files.seeedstudio.com/arduino/package_seeeduino_boards_index.json"],
+            ["arduino-cli.exe", "core", "update-index"],
+            ["arduino-cli.exe", "core", "install", "Seeeduino:mbed"],
+            ["arduino-cli.exe", "compile", "--fqbn", "Seeeduino:mbed:xiaonRF52840Sense", output_file_path],
+            ["arduino-cli.exe", "upload", "-p", port, "--fqbn", "Seeeduino:mbed:xiaonRF52840Sense", output_file_path]
         ]
     
     # Execute the command
