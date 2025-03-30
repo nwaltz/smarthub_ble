@@ -1,0 +1,13 @@
+smarthub/
+.smarthub/
+__pycache__/
+build/
+env/
+base_ble/arduino_code_compiled/
+Images/
+resources/
+irb questions.docx
+purchase request 9_24.xlsx
+X509*
+X509-cert-6601925361457963781.pem
+arduino/xiao_code_compiled/

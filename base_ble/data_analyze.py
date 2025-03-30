@@ -104,25 +104,55 @@ def calculate_bout(time, distance, velocity):
     # Find when it crosses downward, or where bouts could end
     bout_ends = np.argwhere(moving_endpoints)[1::2, 0]
     # If recording ends with a velocity above 0.12 m/s^2, add end point to the end of the bouts
+
     if len(bout_starts) > len(bout_ends):
-        bout_ends = [len(velocity)-1]
+        bout_ends = np.append(bout_ends, len(velocity)-1)
+
+    # print(bout_starts)
+    # print(bout_ends)
+
+    # print(time[bout_starts])
+    # print(time[bout_ends])
+    # print(len(time))
+
+    bout_starts_copy = bout_starts.copy()
+    bout_ends_copy = bout_ends.copy()
+
+
     # Check if the potential bouts meet velocity requirement(need max velocity >0.12m/s) and time requirement(>5s)
     for i in range(bout_starts.size):
         # checks to see if the velocity over the "bout" is all less than required or if "bout" is less than 5 secs
         # This loop should be improved using list comprehension
-        if all(velocity[bout_starts[i]:bout_ends[i]] < 0.12) or time[bout_ends[i]]-time[bout_starts[i]] < 5:
-            if i == len(bout_starts)-1:
-                # Removes incomplete bout
-                bout_starts[i] = -1
-                bout_ends[i] = -1
-                bout_starts = np.delete(bout_starts, i)
-                bout_ends = np.delete(bout_ends, i)
-            else:
-                # Removes incomplete bout and combines with next bout
-                bout_ends[i] = -1
-                bout_starts[i+1] = -1
-    bout_starts = np.array([n for n in bout_starts if n != -1])
-    bout_ends = np.array([n for n in bout_ends if n != -1])
+        # try:
+            if all(velocity[bout_starts[i]:bout_ends[i]] < 0.12) or time[bout_ends[i]]-time[bout_starts[i]] < 5:
+                if i == len(bout_starts)-1:
+                    # Removes incomplete bout
+                    bout_starts_copy[i] = -1
+                    bout_ends_copy[i] = -1
+                    bout_starts = np.delete(bout_starts, i)
+                    bout_ends = np.delete(bout_ends, i)
+
+                elif time[bout_starts[i]] < 0.1 and time[bout_ends[i]] < 0.1:
+                    # sometimes data glitches at start
+                    bout_starts_copy[i] = -1
+                    bout_ends_copy[i] = -1
+                else:
+                    # Removes incomplete bout and combines with next bout
+                    bout_ends_copy[i] = -1
+                    bout_starts_copy[i+1] = -1
+        # except IndexError:
+        #     # Removes incomplete bout
+        #     pass
+        #     # bout_starts[i] = -1
+        #     # bout_ends[i] = -1
+
+
+    bout_starts = np.array([n for n in bout_starts_copy if n != -1])
+    bout_ends = np.array([n for n in bout_ends_copy if n != -1])
+
+    if len(bout_starts) > len(bout_ends):
+        bout_starts = bout_starts[:-1]
+
     # Find the differences in time and distance between possible bout endpoints
     bout = np.subtract(time[bout_ends], time[bout_starts])
     bout_dist = np.subtract(distance[bout_ends], distance[bout_starts])
@@ -157,7 +187,7 @@ def calculate_stroke_metrics(metrics: Metrics, velocity, time, distance):
     stroke_init = np.append(stroke_init, end_points[len(end_points)-1])
     if stroke_init.size == 0:
         raise ValueError("No strokes detected in data")
-    # Find time and distances when strokes start and end
+    # Find time and distances when strokes start and endf
     stroke_init_time = time[stroke_init]
     stroke_init_dist = distance[stroke_init]
     # Find time and distances at peak of strokes
