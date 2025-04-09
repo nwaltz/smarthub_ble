@@ -44,7 +44,7 @@ async def main():
         device, adv = val
         if (device.name is not None):
         # if "Smarthub" in str(device.name):
-            print(f"Name: {device.name: <40}|     RSSI (signal strength): {adv.rssi: <10}|       Address: {d}")
+            print(f"Name: {adv.local_name: <40}|     RSSI (signal strength): {adv.rssi: <10}|       Address: {d}")
             print(type(d))
             print()
     #     if isinstance(d.name, str):
